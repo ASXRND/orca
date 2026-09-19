@@ -7,31 +7,31 @@
 Проект чужой (MIT, оригинал stablyai/orca), у нас **свой форк**:
 `origin` → https://github.com/ASXRND/orca
 
-| Параметр         | Значение                                                                 |
-| ---------------- | ------------------------------------------------------------------------ |
-| Upstream         | https://github.com/stablyai/orca (`main`)                                |
-| Форк (`origin`)  | https://github.com/ASXRND/orca                                           |
-| Версия проекта   | 1.4.197                                                                  |
-| Стек             | Electron 43.7.0, electron-vite (rolldown-vite), React 19, TypeScript ~7  |
-| Менеджер пакетов | pnpm 12.0.0 (через corepack; глобальный pnpm 11.24.0 игнорируется)        |
-| Node             | v24.16.0 (nvm) — требование `engines: node 24`                           |
-| Клон             | `/Users/aleksandrhohon/Desktop/development_locall/orca`                   |
-| Приложение       | `/Applications/Orca.app` (см. раздел «Статус»)                           |
-| Сборка на        | macOS 27.0, arm64, Xcode 26.6 toolchain                                  |
+| Параметр         | Значение                                                                |
+| ---------------- | ----------------------------------------------------------------------- |
+| Upstream         | https://github.com/stablyai/orca (`main`)                               |
+| Форк (`origin`)  | https://github.com/ASXRND/orca                                          |
+| Версия проекта   | 1.4.197                                                                 |
+| Стек             | Electron 43.7.0, electron-vite (rolldown-vite), React 19, TypeScript ~7 |
+| Менеджер пакетов | pnpm 12.0.0 (через corepack; глобальный pnpm 11.24.0 игнорируется)      |
+| Node             | v24.16.0 (nvm) — требование `engines: node 24`                          |
+| Клон             | `/Users/aleksandrhohon/Desktop/development_locall/orca`                 |
+| Приложение       | `/Applications/Orca.app` (см. раздел «Статус»)                          |
+| Сборка на        | macOS 27.0, arm64, Xcode 26.6 toolchain                                 |
 
 ---
 
 ## 0. Статус на 20.09.2026
 
-| Что                                   | Состояние                                                                                          |
-| ------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `/Applications/Orca.app`              | собрано из этого клона (`dist/mac-arm64/Orca.app`), ad-hoc подпись, **запускается и работает**      |
-| Артефакты сборки                      | `dist/orca-macos-arm64.dmg` (211 МБ), `dist/Orca-…-arm64-mac.zip`, исходник `dist/mac-arm64/Orca.app` |
-| Версия сборки                         | `1.4.197-local.test` (видна в данных: `~/Library/Application Support/orca`)                        |
-| Данные приложения                     | `~/Library/Application Support/orca` (создаются автоматически)                                      |
-| dev-режим (`pnpm dev`)                | работает (проверено 19.09)                                                                         |
+| Что                                        | Состояние                                                                                                                                           |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/Applications/Orca.app`                   | собрано из этого клона (`dist/mac-arm64/Orca.app`), ad-hoc подпись, **запускается и работает**                                                      |
+| Артефакты сборки                           | `dist/orca-macos-arm64.dmg` (211 МБ), `dist/Orca-…-arm64-mac.zip`, исходник `dist/mac-arm64/Orca.app`                                               |
+| Версия сборки                              | `1.4.197-local.test` (видна в данных: `~/Library/Application Support/orca`)                                                                         |
+| Данные приложения                          | `~/Library/Application Support/orca` (создаются автоматически)                                                                                      |
+| dev-режим (`pnpm dev`)                     | работает (проверено 19.09)                                                                                                                          |
 | `codesign --verify /Applications/Orca.app` | выдаёт `code has no resources but signature indicates they must be present` — НЕ мешает запуску, особенность ad-hoc; проверять через `codesign -dv` |
-| Форк                                  | https://github.com/ASXRND/orca, правки в `main` + этот файл                                         |
+| Форк                                       | https://github.com/ASXRND/orca, правки в `main` + этот файл                                                                                         |
 
 ---
 
@@ -158,22 +158,43 @@ git fetch upstream && git merge --ff-only upstream/main && git push
 
 ## 6. Известные грабли (проверено на этой машине)
 
-| Грабля                                                              | Обход                                                       |
-| ------------------------------------------------------------------- | ----------------------------------------------------------- |
-| Линкер tapi 26.6 не читает tbd SDK 27.0 → падение node-gyp сборок   | `SDKROOT=.../MacOSX26.5.sdk` (раздел 1)                     |
-| Глобальный pnpm 11.24.0 ≠ требуемому 12.0.0                          | corepack сам качает 12.0.0 по `packageManager` — не трогать |
-| `MaxListenersExceededWarning` на BrowserWindow (11 closed listeners) | не критично; кандидат на фикс                               |
-| Первая `pnpm install` падает на postinstall (rebuild-native-deps)    | повторить с SDKROOT — зависимость уже скачана, проходит     |
+| Грабля                                                                  | Обход                                                                |
+| ----------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Линкер tapi 26.6 не читает tbd SDK 27.0 → падение node-gyp сборок       | `SDKROOT=.../MacOSX26.5.sdk` (раздел 1)                              |
+| Глобальный pnpm 11.24.0 ≠ требуемому 12.0.0                             | corepack сам качает 12.0.0 по `packageManager` — не трогать          |
+| `MaxListenersExceededWarning` на BrowserWindow (11 closed listeners)    | **исправлено 20.09** — хаб `window-closed-hub` (см. раздел 6.1)      |
+| Первая `pnpm install` падает на postinstall (rebuild-native-deps)       | повторить с SDKROOT — зависимость уже скачана, проходит              |
 | `pnpm build:mac` падает: x64-вариантов нативных модулей нет (universal) | `pnpm exec electron-builder … --mac --arm64` напрямую (см. раздел 3) |
-| `codesign --verify` ругается: `no resources but signature indicates…` | норма для ad-hoc; проверять `codesign -dv`, запуск работает |
+| `codesign --verify` ругается: `no resources but signature indicates…`   | норма для ad-hoc; проверять `codesign -dv`, запуск работает          |
+
+---
+
+### 6.1. Фикс MaxListenersExceededWarning (20.09.2026)
+
+**Симптом:** при старте `MaxListenersExceededWarning: Possible EventEmitter memory
+leak detected. 11 closed listeners added to [BrowserWindow]` — 12 модулей
+подписывались напрямую на `win.on('closed', ...)`, лимит Electron = 10.
+
+**Решение:** единый хаб `src/main/window/window-closed-hub.ts`:
+`subscribeWindowClosed(win, cb)` — на окно один `'closed'`-подписчик, события
+fan-out'ятся подписчикам. Мигрированы 12 точек вызова: attach-main-window-services,
+createMainWindow, main-window-controller, runtime-window-lifecycle,
+main-window-visual-lifecycle, mobile-markdown/terminal-tab/session-tab relays,
+speech IPC, worktree-base-directory-watcher, macos-tcc-prompt-notice,
+service-configuration.
+
+**Проверка:** 23 unit-теста зелёные (vitest, `config/vitest.config.ts`), `pnpm tc`
+чисто, пересобрано electron-builder'ом (`--mac --arm64`), в логе прямого запуска
+`/tmp/orca_run.log` — 0 вхождений `MaxListeners` (раньше warning был сразу после
+`starting electron app...`). Коммит `70822b7c` запушен в форк (ASXRND/orca, main).
 
 ---
 
 ## 7. Журнал изменений
 
-| Дата       | Что сделали                                                                                     |
-| ---------- | ----------------------------------------------------------------------------------------------- |
-| 19.09.2026 | Склонировали форк, поставили зависимости (SDKROOT-обход), подняли dev — работает                 |
-| 19.09.2026 | `pnpm build:mac` падает на universal (x64 native variants); перешли на `--mac --arm64` напрямую  |
-| 20.09.2026 | Собран `Orca.app` (arm64, ad-hoc), установлен в /Applications, запускается и работает            |
-
+| Дата       | Что сделали                                                                                                           |
+| ---------- | --------------------------------------------------------------------------------------------------------------------- |
+| 19.09.2026 | Склонировали форк, поставили зависимости (SDKROOT-обход), подняли dev — работает                                      |
+| 19.09.2026 | `pnpm build:mac` падает на universal (x64 native variants); перешли на `--mac --arm64` напрямую                       |
+| 20.09.2026 | Собран `Orca.app` (arm64, ad-hoc), установлен в /Applications, запускается и работает                                 |
+| 20.09.2026 | Фикс MaxListenersExceededWarning: хаб `window-closed-hub.ts`, 12 точек подписки мигрированы, коммит `70822b7c` в форк |
