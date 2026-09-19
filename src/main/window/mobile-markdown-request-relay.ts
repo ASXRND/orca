@@ -8,6 +8,7 @@ import type {
   RuntimeMobileMarkdownRequest,
   RuntimeMobileMarkdownResponse
 } from '../../shared/mobile-markdown-document'
+import { onWindowClosed } from './window-closed-hub'
 
 const MOBILE_MARKDOWN_RENDERER_TIMEOUT_MS = 20_000
 
@@ -39,9 +40,7 @@ export async function requestMobileMarkdownFromRenderer(
       settled = true
       clearTimeout(timeout)
       ipcMain.removeListener('ui:mobileMarkdownResponse', onResponse)
-      if (typeof mainWindow.removeListener === 'function') {
-        mainWindow.removeListener('closed', onRendererUnavailable)
-      }
+      removeClosedSubscription()
       if (typeof webContents.removeListener === 'function') {
         webContents.removeListener('destroyed', onRendererUnavailable)
         webContents.removeListener('render-process-gone', onRendererUnavailable)
@@ -75,9 +74,7 @@ export async function requestMobileMarkdownFromRenderer(
       }
     }
     ipcMain.on('ui:mobileMarkdownResponse', onResponse)
-    if (typeof mainWindow.once === 'function') {
-      mainWindow.once('closed', onRendererUnavailable)
-    }
+    const removeClosedSubscription = onWindowClosed(mainWindow, onRendererUnavailable)
     if (typeof webContents.once === 'function') {
       webContents.once('destroyed', onRendererUnavailable)
       webContents.once('render-process-gone', onRendererUnavailable)

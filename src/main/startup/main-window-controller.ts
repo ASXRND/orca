@@ -16,6 +16,7 @@ import {
 } from './windows-install-dir-acl-recovery'
 import { logStartupMilestone } from './startup-diagnostics'
 import { notifyMainWindowBecameVisible } from '../window/main-window-visibility'
+import { onWindowClosed } from '../window/window-closed-hub'
 import { setTrayAttention } from '../tray/system-tray'
 import {
   createSystemTrayDeferred,
@@ -201,7 +202,7 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
         minIntervalMs: AGENT_STATE_CRASH_BREADCRUMB_MIN_INTERVAL_MS
       })
   })
-  window.on('closed', () => {
+  onWindowClosed(window, () => {
     if (state.mainWindow === window) {
       state.mainWindow = null
     }

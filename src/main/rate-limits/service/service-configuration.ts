@@ -1,6 +1,7 @@
 import type { BrowserWindow } from 'electron'
 import { hasMiniMaxSessionCookie } from '../../minimax/minimax-cookie-store'
 import { hasMiniMaxApiKey } from '../../minimax/minimax-api-key-store'
+import { onWindowClosed } from '../../window/window-closed-hub'
 import { RateLimitServiceAccountRefresh } from './service-account-refresh'
 import {
   type CodexAccountSelectionTarget,
@@ -72,12 +73,12 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
     const refreshOnResume = (): void => {
       void this.refreshIfWindowActive()
     }
-    // Why: attach() can replace windows; remove the previous closed listener too, not only the focus listeners.
+    // Why: attach() can replace windows; remove the previous closed subscription too, not only the focus listeners.
     const detachWindowListeners = (): void => {
       mainWindow.removeListener('focus', refreshOnResume)
       mainWindow.removeListener('show', refreshOnResume)
       mainWindow.removeListener('restore', refreshOnResume)
-      mainWindow.removeListener('closed', onClosed)
+      removeClosedSubscription()
     }
     const onClosed = (): void => {
       detachWindowListeners()
@@ -91,7 +92,7 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
     mainWindow.on('focus', refreshOnResume)
     mainWindow.on('show', refreshOnResume)
     mainWindow.on('restore', refreshOnResume)
-    mainWindow.on('closed', onClosed)
+    const removeClosedSubscription = onWindowClosed(mainWindow, onClosed)
     this.detachWindowListeners = detachWindowListeners
   }
 

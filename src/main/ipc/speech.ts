@@ -11,6 +11,7 @@ import {
   saveOpenAiSpeechApiKey
 } from '../speech/openai-api-key-store'
 import type { Store } from '../persistence'
+import { onWindowClosed } from '../window/window-closed-hub'
 
 export function registerSpeechHandlers(store: Store): void {
   ipcMain.handle('speech:getCatalog', () => {
@@ -54,10 +55,10 @@ export function registerSpeechHandlers(store: Store): void {
         return
       }
       progressCallbackCleared = true
-      window.off('closed', cleanupProgressCallback)
+      removeClosedSubscription()
       clearProgressCallback()
     }
-    window.once('closed', cleanupProgressCallback)
+    const removeClosedSubscription = onWindowClosed(window, cleanupProgressCallback)
     try {
       await manager.downloadModel(modelId)
     } finally {
@@ -109,10 +110,8 @@ export function registerSpeechHandlers(store: Store): void {
           })
           .catch(() => {})
       }
-      const cleanupSessionListener = (): void => {
-        window.off('closed', cleanupOnWindowClosed)
-      }
-      window.once('closed', cleanupOnWindowClosed)
+      const removeClosedSubscription = onWindowClosed(window, cleanupOnWindowClosed)
+      const cleanupSessionListener = removeClosedSubscription
 
       try {
         // Why: on macOS, the Electron binary needs explicit TCC permission for
