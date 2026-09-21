@@ -5,7 +5,7 @@ import type { CliInstallMethod, CliInstallStatus } from '../../shared/cli-instal
 import { isAppImageExtractedLauncherPath } from './appimage-extracted-root'
 import { DEV_COMMAND_NAME, DEV_LAUNCHER_DIR } from './cli-install-constants'
 import { buildWindowsForwarder, extractManagedUnixLauncherTarget } from './cli-dev-launcher'
-import { isMissingError } from './cli-install-errors'
+import { isMissingError, isPermissionError } from './cli-install-errors'
 import { CliInstallLocation } from './cli-install-location'
 import { isPathInsideOrEqual, samePathEntry } from './cli-install-path-format'
 import { extractLegacyAppImageCliWrapperTarget } from './legacy-appimage-cli-wrapper'
@@ -83,6 +83,21 @@ export class CliCommandInspection extends CliInstallLocation {
           state: 'not_installed',
           currentTarget: null,
           detail: `Register ${commandPath} to use Orca from the terminal.`
+        })
+      }
+      if (isPermissionError(error)) {
+        // Why: macOS checks symlink modes, so a root-owned 0700 link (privileged installs set
+        // `umask 077`) is unreadable for the user account and `readlink` fails with EACCES.
+        // Report a repairable state instead of surfacing a raw privileged-IPC failure; registering
+        // the command again rewrites the link with mode 0755.
+        return this.buildStatus({
+          commandPath,
+          launcherPath,
+          installMethod: 'symlink',
+          supported: true,
+          state: 'stale',
+          currentTarget: null,
+          detail: `${commandPath} is not readable by your user account. Register the command again to repair its permissions.`
         })
       }
       throw error

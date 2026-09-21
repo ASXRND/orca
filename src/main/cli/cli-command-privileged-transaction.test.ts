@@ -101,6 +101,27 @@ describe.skipIf(process.platform !== 'darwin' || process.getuid?.() === 0)(
       expect(commands.every((command) => !command.includes('mv -f'))).toBe(true)
     })
 
+    it('publishes the command symlink readable by the installing user', async () => {
+      const fixture = await createPrivilegedFixture()
+      const installer = new CliInstaller({
+        ...fixtureInstallerOptions(fixture),
+        privilegedRunner: async (command) => {
+          await chmod(fixture.protectedDirectory, 0o700)
+          await executePrivilegedShell(command)
+        }
+      })
+
+      await chmod(fixture.protectedDirectory, 0o500)
+      const installed = await installer.install()
+      expect(installed.state).toBe('installed')
+
+      // Why: the generated script sets `umask 077`, and macOS checks symlink modes, so a 0700 link
+      // is unreadable for the logged-in user: `readlink` (this assertion) then fails with EACCES.
+      const stats = await lstat(fixture.commandPath)
+      expect(stats.mode & 0o777).toBe(0o755)
+      await expect(readlink(fixture.commandPath)).resolves.toBe(installed.launcherPath)
+    })
+
     it('restores a trailing-newline symlink inserted after privileged inspection', async () => {
       const fixture = await createPrivilegedFixture()
       const staleTarget = join(fixture.userDataPath, 'cli', 'bin', 'old', 'orca')

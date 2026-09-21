@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { lstat, mkdir, readFile, readlink, rename, rmdir } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import type { CliInstallStatus } from '../../shared/cli-install-types'
-import { isMissingError } from './cli-install-errors'
+import { isMissingError, isPermissionError } from './cli-install-errors'
 import { quoteShell } from './cli-install-path-format'
 
 export type EntryIdentity = {
@@ -96,7 +96,13 @@ export async function inspectStableCommand(
       } else if (afterInspection && status.state !== 'conflict') {
         fileSha256 = await hashCommandFile(commandPath)
       }
-    } catch {
+    } catch (error) {
+      // Why: EACCES is not a race, so the retry below cannot fix it. Swallowing it here would
+      // replace the real cause with "changed while Orca inspected it" and hide that the link is
+      // simply unreadable for this user account.
+      if (isPermissionError(error)) {
+        throw error
+      }
       continue
     }
     const afterEvidence = await readEntrySnapshot(commandPath)
@@ -198,9 +204,14 @@ export function buildMacPrivilegedSymlinkTransaction(
   const rollback =
     `/bin/rm -f ${quoteShell(publishPath)}; /bin/rmdir ${quoteShell(publishDirectory)} 2>/dev/null || :; ` +
     `if [ "$captured" -eq 1 ]; then ${restoreOrPreserve}; else /bin/rmdir ${quoteShell(transactionDirectory)}; fi; exit 73`
+  // Why: the `umask 077` above also applies to the staged symlink, and macOS checks symlink modes,
+  // so a 0700 root-owned link is unreadable for the logged-in user: `readlink` fails with EACCES,
+  // the CLI cannot resolve its own path, and the install status probe throws instead of reporting.
+  // Widen the staged link before publication; the hard link keeps this inode's mode.
   return (
     `${capture}if /bin/mkdir ${quoteShell(publishDirectory)} && ` +
     `/bin/ln -s ${quoteShell(args.launcherPath)} ${quoteShell(publishPath)} && ` +
+    `/bin/chmod -h 755 ${quoteShell(publishPath)} && ` +
     `/bin/ln -P ${quoteShell(publishPath)} ${quoteShell(commandDirectory)}; then ` +
     `/bin/rm ${quoteShell(publishPath)}; /bin/rmdir ${quoteShell(publishDirectory)}; ` +
     `if [ "$captured" -eq 1 ]; then /bin/rm ${quoteShell(heldPath)}; fi; ` +

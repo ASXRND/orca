@@ -166,6 +166,7 @@ git fetch upstream && git merge --ff-only upstream/main && git push
 | Первая `pnpm install` падает на postinstall (rebuild-native-deps)       | повторить с SDKROOT — зависимость уже скачана, проходит              |
 | `pnpm build:mac` падает: x64-вариантов нативных модулей нет (universal) | `pnpm exec electron-builder … --mac --arm64` напрямую (см. раздел 3) |
 | `codesign --verify` ругается: `no resources but signature indicates…`   | норма для ad-hoc; проверять `codesign -dv`, запуск работает          |
+| `EACCES: permission denied, readlink '/usr/local/bin/orca'` в UI         | **исправлено 21.09** — права CLI-симлинка, см. раздел 6.2            |
 
 ---
 
@@ -190,6 +191,56 @@ service-configuration.
 
 ---
 
+### 6.2. Фикс EACCES на `/usr/local/bin/orca` (21.09.2026)
+
+**Симптом (в консоли рендерера):**
+
+```
+Error invoking remote method 'cli:getInstallStatus':
+Error: EACCES: permission denied, readlink '/usr/local/bin/orca'
+```
+
+и в терминале `orca --version` → `Unable to determine Orca.app path from symlink: /usr/local/bin/orca`.
+
+**Причина (цепочка целиком):**
+
+1. Установщик CLI на macOS пишет симлинк привилегированно (`osascript … with administrator
+   privileges`), а сгенерированный скрипт начинается с `umask 077;` (делает приватной
+   транзакционную директорию) — `cli-command-filesystem-transaction.ts`.
+2. `umask 077` наследуется и на `ln -s`, поэтому симлинк получается `lrwx------`
+   (0700, root:wheel) вместо обычных `lrwxr-xr-x` (0755) — проверено `stat -f '%Sp'`:
+   единственный такой файл в `/usr/local/bin`.
+3. macOS проверяет права **самого симлинка**, поэтому у обычного пользователя
+   `readlink` падает с EACCES (`lstat` при этом проходит — отсюда «файл есть, но не читается»).
+4. `inspectSymlink` обрабатывал только ENOENT, а `inspectStableCommand` глотал EACCES в
+   retry-цикле → исключение уходило в renderer как ошибка IPC.
+5. Побочно: сам CLI не мог определить свой путь (`orca --version`), т.е. команда была нерабочей.
+
+**Решение (в форке):**
+
+- `cli-command-filesystem-transaction.ts`: перед публикацией симлинка
+  `/bin/chmod -h 755 <publishPath>` (hard-link сохраняет inode, поэтому режим едет в
+  `/usr/local/bin`); EACCES в retry-цикле больше не глотается — пробрасывается как причина.
+- `cli-command-inspection.ts`: EACCES → статус `stale` с внятным `detail`
+  («not readable by your user account…»), а не исключение IPC. Повторная установка CLI
+  перезапишет симлинк с правильными правами (самовосстановление).
+
+**Проверка:** `src/main/cli` — 30 файлов, 213 тестов зелёные; новый
+`cli-command-inspection-permission.test.ts` (2) + тест прав в
+`cli-command-privileged-transaction.test.ts` (падает без `chmod`-строки — проверено
+откатом фикса). `pnpm tc` чисто, oxlint чисто.
+
+**Лечение уже существующего симлинка** (одноразово, нужен пароль админа):
+
+```bash
+sudo chmod -h 755 /usr/local/bin/orca    # -h: менять сам симлинк, не цель
+```
+
+Либо в Orca: Settings → Command Line Tool → удалить и поставить заново (после
+пересборки с этим фиксом права будут 0755 сразу).
+
+---
+
 ## 7. Журнал изменений
 
 | Дата       | Что сделали                                                                                                           |
@@ -198,3 +249,4 @@ service-configuration.
 | 19.09.2026 | `pnpm build:mac` падает на universal (x64 native variants); перешли на `--mac --arm64` напрямую                       |
 | 20.09.2026 | Собран `Orca.app` (arm64, ad-hoc), установлен в /Applications, запускается и работает                                 |
 | 20.09.2026 | Фикс MaxListenersExceededWarning: хаб `window-closed-hub.ts`, 12 точек подписки мигрированы, коммит `70822b7c` в форк |
+| 21.09.2026 | Фикс EACCES на readlink `/usr/local/bin/orca`: `chmod -h 755` при публикации симлинка + EACCES → `stale` вместо падения IPC (раздел 6.2) |
