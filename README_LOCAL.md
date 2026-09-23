@@ -11,7 +11,7 @@
 | ---------------- | ----------------------------------------------------------------------- |
 | Upstream         | https://github.com/stablyai/orca (`main`)                               |
 | Форк (`origin`)  | https://github.com/ASXRND/orca                                          |
-| Версия проекта   | 1.4.197                                                                 |
+| Версия проекта   | 1.4.209                                                                 |
 | Стек             | Electron 43.7.0, electron-vite (rolldown-vite), React 19, TypeScript ~7 |
 | Менеджер пакетов | pnpm 12.0.0 (через corepack; глобальный pnpm 11.24.0 игнорируется)      |
 | Node             | v24.16.0 (nvm) — требование `engines: node 24`                          |
@@ -21,17 +21,18 @@
 
 ---
 
-## 0. Статус на 20.09.2026
+## 0. Статус на 23.09.2026
 
 | Что                                        | Состояние                                                                                                                                           |
 | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `/Applications/Orca.app`                   | собрано из этого клона (`dist/mac-arm64/Orca.app`), ad-hoc подпись, **запускается и работает**                                                      |
 | Артефакты сборки                           | `dist/orca-macos-arm64.dmg` (211 МБ), `dist/Orca-…-arm64-mac.zip`, исходник `dist/mac-arm64/Orca.app`                                               |
-| Версия сборки                              | `1.4.197-local.test` (видна в данных: `~/Library/Application Support/orca`)                                                                         |
+| Версия сборки                              | `1.4.209-local` (asar-манифест + About; данные: `~/Library/Application Support/orca`)                                                                         |
 | Данные приложения                          | `~/Library/Application Support/orca` (создаются автоматически)                                                                                      |
 | dev-режим (`pnpm dev`)                     | работает (проверено 19.09)                                                                                                                          |
 | `codesign --verify /Applications/Orca.app` | выдаёт `code has no resources but signature indicates they must be present` — НЕ мешает запуску, особенность ad-hoc; проверять через `codesign -dv` |
 | Форк                                       | https://github.com/ASXRND/orca, правки в `main` + этот файл                                                                                         |
+| Наши коммиты                               | `70822b7c` (MaxListeners-хаб, 6.1), `12b2e5f7` (EACCES CLI, 6.2), merge-коммиты апстримов: `895b0564` (v1.4.206), `f1e43ec7` (v1.4.209)             |
 
 ---
 
@@ -100,10 +101,20 @@ ad-hoc (`-`), notarization выключен. Это позволяет запу�
 
 ```bash
 osascript -e 'quit app "Orca"' 2>/dev/null
+# бэкап текущей версии (для отката):
+cp -Rp /Applications/Orca.app ~/Desktop/Orca-<версия>-local-backup.app
 rm -rf /Applications/Orca.app
 cp -R dist/mac-arm64/Orca.app /Applications/
 xattr -dr com.apple.quarantine /Applications/Orca.app   # снять карантин, если появлялся
 open -a Orca
+```
+
+Если `cp` прервать (Ctrl-C / обрыв сессии) — в `/Applications` остаётся битая
+полукопия с правами `Operation not permitted` даже у владельца. Лечение:
+
+```bash
+chflags -R nouchg /Applications/Orca.app   # снять immutable-флаги, если стоят
+rm -rf /Applications/Orca.app              # затем чистый cp заново
 ```
 
 **ВАЖНО про `pnpm build:mac`:** он собирает universal (arm64+x64) и падает с
@@ -114,7 +125,7 @@ build:desktop и др.):
 
 ```bash
 ORCA_BUILD_COMMIT=$(git rev-parse --short=12 HEAD) \
-ORCA_LOCAL_BUILD_VERSION=1.4.197-local \
+ORCA_LOCAL_BUILD_VERSION=1.4.209-local \
 SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk \
 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --arm64
 ```
@@ -142,17 +153,79 @@ UI-тесты / запуск app из тестов — только с `ORCA_BAC
 ## 5. Git
 
 ```bash
-git remote -v      # origin = ASXRND/orca (форк); upstream не настроен
-git branch         # работаем в main (пока без своей ветки — см. историю)
+git remote -v      # origin = ASXRND/orca (форк); upstream = stablyai/orca
+git branch         # работаем в main
 git add -A && git commit -m "..." && git push    # в свой форк
 ```
 
-Подтянуть обновления upstream:
+**ВАЖНО:** husky pre-commit гоняет `pnpm install` (rebuild-native-deps) — коммитить
+с `SDKROOT` (раздел 1), иначе commit «падает» на пересборке node-pty:
 
 ```bash
-git remote add upstream https://github.com/stablyai/orca.git  # если ещё нет
-git fetch upstream && git merge --ff-only upstream/main && git push
+SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk git commit -m "..."
 ```
+
+### 5.1. Обновление до новой версии upstream (проверенная процедура, 21–23.09.2026)
+
+**Ключевой принцип: официальные апдейтеры НЕ ставить** (см. раздел 6.3) — они
+затирают /Applications и лишают нас фиксов. Любой новый релиз вмержить и
+пересобрать самим.
+
+```bash
+cd /Users/aleksandrhohon/Desktop/development_locall/orca
+export SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk
+
+# 1. Посмотреть, что нового
+git ls-remote --tags https://github.com/stablyai/orca.git | grep 'refs/tags/v1.4'
+
+# 2. Забрать нужный тег (без меток-мусора)
+git fetch upstream tag v1.4.2XX --no-tags
+
+# 3. Оценить масштаб: коммиты апстрима и задевание наших файлов фиксов
+git log --oneline v1.4.старый..v1.4.2XX | wc -l
+git diff --stat v1.4.старый v1.4.2XX -- \
+  src/main/window/window-closed-hub.ts \
+  src/main/cli/cli-command-filesystem-transaction.ts \
+  src/main/cli/cli-command-inspection.ts
+
+# 4. Merge (НЕ rebase/cherry-pick — наши коммиты остаются, история честная)
+git merge v1.4.2XX --no-edit
+# Типовой конфликт: package.json, resources/skills/release-mapping.json —
+# наших правок там НЕТ (их меняет только release-коммит апстрима) → брать их версию:
+git checkout --theirs package.json resources/skills/release-mapping.json
+git add <конфликтные файлы> && SDKROOT=$SDKROOT git commit --no-edit
+
+# 5. Зависимости
+pnpm install --frozen-lockfile     # если lockfile не менялся — 100 мс
+
+# 6. Полный цикл сборки бандлов (typecheck → out/)
+pnpm build:desktop
+
+# 7. Упаковка arm64 (свой коммит-хэш и версия!)
+ORCA_BUILD_COMMIT=$(git rev-parse --short=12 HEAD) \
+ORCA_LOCAL_BUILD_VERSION=1.4.2XX-local \
+SDKROOT=$SDKROOT \
+pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --arm64
+# Ошибка «darwin/x64 requires native variants» В КОНЦЕ — известная и игнорируемая:
+# arm64-зип/dmg и dist/mac-arm64/Orca.app уже собраны (см. грабли).
+
+# 8. Проверить фиксы ВНУТРИ нового asar ДО установки (все 3 должны дать 1):
+npx --yes @electron/asar extract dist/mac-arm64/Orca.app/Contents/Resources/app.asar /tmp/asar_check
+grep -c 'chmod -h 755'                      /tmp/asar_check/out/main/index.js   # фикс 6.2a
+grep -c 'not readable by your user account' /tmp/asar_check/out/main/index.js   # фикс 6.2b
+grep -c 'window-closed-hub'                 /tmp/asar_check/out/main/index.js   # фикс 6.1
+cat dist/mac-arm64/Orca.app/Contents/Resources/orca-local-build.json              # версия+commit+arch
+rm -rf /tmp/asar_check
+
+# 9. Установка с бэкапом (раздел 3) и финальная проверка
+open -a Orca   # Orca запущена, EACCES/MaxListeners в ~/Library/Application Support/orca/logs/main.trace.ndjson = 0
+ls -la /usr/local/bin/orca && /usr/local/bin/orca --version   # симлинк 0755 жив, версия = x.y.z-local
+
+# 10. Запушить merge + этот файл
+git push origin main
+```
+
+Откат: `rm -rf /Applications/Orca.app && cp -R ~/Desktop/Orca-<версия>-local-backup.app /Applications/`.
 
 ---
 
@@ -167,6 +240,10 @@ git fetch upstream && git merge --ff-only upstream/main && git push
 | `pnpm build:mac` падает: x64-вариантов нативных модулей нет (universal) | `pnpm exec electron-builder … --mac --arm64` напрямую (см. раздел 3) |
 | `codesign --verify` ругается: `no resources but signature indicates…`   | норма для ad-hoc; проверять `codesign -dv`, запуск работает          |
 | `EACCES: permission denied, readlink '/usr/local/bin/orca'` в UI         | **исправлено 21.09** — права CLI-симлинка, см. раздел 6.2            |
+| `git commit` падает на husky pre-commit (rebuild node-pty)               | коммитить с `SDKROOT=…MacOSX26.5.sdk` (см. раздел 5)                 |
+| Прерванный `cp -R Orca.app /Applications/` → битая полукопия «Operation not permitted» | `chflags -R nouchg` + `rm -rf`, затем чистый cp (см. раздел 3) |
+| Официальный апдейтер качает релиз без наших фиксов                       | НЕ ставить; вмержить тег и пересобрать (см. разделы 5.1, 6.3)        |
+| Предупреждения `RecoverableRenderErrorBoundary` / `client-creation-action-error` в бандл-логе | это имена чанков, не ошибки                     |
 
 ---
 
@@ -241,6 +318,45 @@ sudo chmod -h 755 /usr/local/bin/orca    # -h: менять сам симлин�
 
 ---
 
+### 6.3. Механизм апдейтера и правило обновления (23.09.2026)
+
+**Как устроен апдейт в Orca:**
+
+- Официальный апдейтер (electron-updater) качает релизы в
+  `~/Library/Caches/orca-updater/pending/` (например `temp-Orca-1.4.206-arm64-mac.zip`)
+  и предлагает установить — это **официальный билд без наших коммитов**.
+  Ставить его нельзя: затрёт `/Applications/Orca.app`, потеряются
+  `70822b7c` (6.1) и `12b2e5f7` (6.2). Если такой zip уже лежит — удалить.
+- **Штатный обход:** у Orca есть механизм «local build» — приложение принимает
+  собственный zip как апдейт, если в `Contents/Resources` лежит
+  `orca-local-build.json` (версия, 12-символьный коммит, архитектура,
+  sha512+подпись). Проверяется через меню «Check for Local Build».
+  Код: `local-build-candidate.ts`, `local-build-switch.ts`,
+  `local-build-compatibility.ts`, меню — `updater-menu-checks.ts`,
+  `register-app-menu.ts`.
+- **Наша процедура** — проще и надёжнее: вмержить тег upstream → пересобрать →
+  поставить `cp -R` с бэкапом (раздел 5.1). In-app local-build-switch не нужен.
+
+**История обновлений форка:**
+
+| Дата       | Было          | Стало         | Как                                                                  |
+| ---------- | ------------- | ------------- | -------------------------------------------------------------------- |
+| 20.09.2026 | —             | 1.4.197-local | первая сборка из клона                                                |
+| 21.09.2026 | 1.4.197-local | 1.4.206-local | merge v1.4.206 (28 коммитов, merge `895b0564`), конфликтов нет        |
+| 23.09.2026 | 1.4.206-local | 1.4.209-local | merge v1.4.209 (111 коммитов, merge `f1e43ec7`); конфликт только в release-файлах |
+
+Проверка после каждого обновления (все обязательны):
+
+```bash
+# 1. Фиксы в asar — 3 grep'а из раздела 5.1 шаг 8 (все = 1)
+# 2. Приложение запускается и работает
+# 3. CLI: ls -la /usr/local/bin/orca  → lrwxr-xr-x; orca --version → x.y.z-local
+# 4. Логи: grep -c EACCES ~/Library/Application\ Support/orca/logs/main.trace.ndjson → 0
+#    grep -c MaxListeners … → 0
+```
+
+---
+
 ## 7. Журнал изменений
 
 | Дата       | Что сделали                                                                                                           |
@@ -249,4 +365,6 @@ sudo chmod -h 755 /usr/local/bin/orca    # -h: менять сам симлин�
 | 19.09.2026 | `pnpm build:mac` падает на universal (x64 native variants); перешли на `--mac --arm64` напрямую                       |
 | 20.09.2026 | Собран `Orca.app` (arm64, ad-hoc), установлен в /Applications, запускается и работает                                 |
 | 20.09.2026 | Фикс MaxListenersExceededWarning: хаб `window-closed-hub.ts`, 12 точек подписки мигрированы, коммит `70822b7c` в форк |
-| 21.09.2026 | Фикс EACCES на readlink `/usr/local/bin/orca`: `chmod -h 755` при публикации симлинка + EACCES → `stale` вместо падения IPC (раздел 6.2) || 23.09.2026 | Обновление до upstream v1.4.209 | merge v1.4.206→v1.4.209 (111 коммитов, merge f1e43ec7), сборка 1.4.209-local arm64 установлена. Конфликты только в package.json/release-mapping.json (наших правок там нет, взята версия upstream). Все фиксы 6.1/6.2 проверены в новом asar. Симлинк /usr/local/bin/orca жив (0755), `orca --version`=1.4.209-local, EACCES в логах 0. Бэкапы: ~/Desktop/Orca-1.4.197-local-backup.app, ~/Desktop/Orca-1.4.206-local-backup.app |
+| 21.09.2026 | Фикс EACCES на readlink `/usr/local/bin/orca`: `chmod -h 755` при публикации симлинка + EACCES → `stale` вместо падения IPC (раздел 6.2) |
+| 21.09.2026 | Merge upstream v1.4.206 (merge `895b0564`), сборка 1.4.206-local установлена; pending-зип официального апдейтера удалён, бэкап 1.4.197 на Desktop |
+| 23.09.2026 | Merge upstream v1.4.209 (merge `f1e43ec7`), сборка 1.4.209-local установлена. Конфликты только в `package.json`/`release-mapping.json` (наших правок там нет, взята версия upstream). Все фиксы 6.1/6.2 проверены в asar, симлинк жив (0755), EACCES 0. Бэкапы: `~/Desktop/Orca-1.4.197-local-backup.app`, `~/Desktop/Orca-1.4.206-local-backup.app`. Процедура обновления описана в разделе 5.1, механизм апдейтера — 6.3 |
