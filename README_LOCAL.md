@@ -33,6 +33,9 @@
 | `codesign --verify /Applications/Orca.app` | выдаёт `code has no resources but signature indicates they must be present` — НЕ мешает запуску, особенность ad-hoc; проверять через `codesign -dv` |
 | Форк                                       | https://github.com/ASXRND/orca, правки в `main` + этот файл                                                                                         |
 | Наши коммиты                               | `70822b7c` (MaxListeners-хаб, 6.1), `12b2e5f7` (EACCES CLI, 6.2), merge-коммиты апстримов: `895b0564` (v1.4.206), `f1e43ec7` (v1.4.209)             |
+| **Процедура обновления** (шаг за шагом)          | раздел 5.1 — fetch тега → merge → build → проверить asar → установить с бэкапом           |
+| **Механизм апдейтера / почему НЕ ставить офиц. релиз** | раздел 6.3                                                                          |
+| **Бэкапы для отката**                            | `~/Desktop/Orca-1.4.197-local-backup.app`, `~/Desktop/Orca-1.4.206-local-backup.app`     |
 
 ---
 
