@@ -1,5 +1,5 @@
 import React from 'react'
-import { Ellipsis, ListCollapse, Loader2, RefreshCw } from 'lucide-react'
+import { Ellipsis, FolderOpen, ListCollapse, Loader2, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -30,6 +30,8 @@ type FileExplorerToolbarProps = {
   onToggleGitIgnoredFiles: () => void
   showDotfiles: boolean
   onToggleDotfiles: () => void
+  browseActive: boolean
+  onToggleBrowse: () => void
 }
 
 export function FileExplorerToolbar({
@@ -44,7 +46,9 @@ export function FileExplorerToolbar({
   showGitIgnoredFiles,
   onToggleGitIgnoredFiles,
   showDotfiles,
-  onToggleDotfiles
+  onToggleDotfiles,
+  browseActive,
+  onToggleBrowse
 }: FileExplorerToolbarProps): React.JSX.Element {
   return (
     <div className="flex h-8 min-h-8 items-center gap-2 border-b border-border px-2">
@@ -54,6 +58,30 @@ export function FileExplorerToolbar({
       >
         {repoName}
       </span>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant={browseActive ? 'secondary' : 'ghost'}
+            size="icon-xs"
+            className="text-muted-foreground hover:text-foreground"
+            aria-label={translate(
+              'auto.components.right.sidebar.FileExplorerToolbar.9a1f2c33bd',
+              'Browse any folder'
+            )}
+            aria-pressed={browseActive}
+            onClick={onToggleBrowse}
+          >
+            <FolderOpen className="size-3" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" sideOffset={4}>
+          {translate(
+            'auto.components.right.sidebar.FileExplorerToolbar.9a1f2c33bd',
+            'Browse any folder'
+          )}
+        </TooltipContent>
+      </Tooltip>
       <Tooltip>
         <TooltipTrigger asChild>
           <Button

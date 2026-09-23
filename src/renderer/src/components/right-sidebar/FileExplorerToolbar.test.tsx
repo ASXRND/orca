@@ -172,6 +172,8 @@ function makeToolbar(overrides: Partial<Parameters<typeof FileExplorerToolbar>[0
     onToggleGitIgnoredFiles: vi.fn(),
     showDotfiles: true,
     onToggleDotfiles: vi.fn(),
+    browseActive: false,
+    onToggleBrowse: vi.fn(),
     ...overrides
   })
 }
@@ -309,6 +311,7 @@ describe('FileExplorerToolbar', () => {
     const element = makeToolbar()
 
     expect(getToolbarButtonLabels(element)).toEqual([
+      'Browse any folder',
       'Collapse All',
       'Refresh Explorer',
       'More Explorer Actions'

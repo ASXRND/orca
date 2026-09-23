@@ -133,6 +133,36 @@ SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk \
 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --arm64
 ```
 
+**Подпись локальных сборок (обязательно):** при ad-hoc подписи cdhash меняется на
+каждой сборке, поэтому macOS не может привязать к приложению выданные разрешения
+(Local Network и др.): тумблеры в настройках остаются, но перестают совпадать с
+приложением, и локальная сеть из терминалов Орки падает с `No route to host`
+(в панели хостов — `connect EHOSTUNREACH …`). Лечится один раз — постоянным
+self-signed сертификатом (уже сделано на этой машине):
+
+```bash
+# ~/.orca-local-signing: key.pem / cert.pem / orca-local.p12 (пароль p12: orca-local)
+# identity "Orca Local Signing" импортирована в login keychain и доверена для codeSign
+# (~/.orca-local-signing/codesign-shim — обёртка, снимающая --timestamp)
+
+PATH=~/.orca-local-signing/codesign-shim:$PATH \
+CSC_NAME="Orca Local Signing" \
+ORCA_BUILD_COMMIT=$(git rev-parse --short=12 HEAD) \
+ORCA_LOCAL_BUILD_VERSION=1.4.209-local \
+DEVELOPER_DIR=/Library/Developer/CommandLineTools \
+SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk \
+pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --arm64
+```
+
+- `codesign-shim` нужен потому, что electron-builder добавляет `--timestamp`, а
+  Apple timestamp-сервер не выдаёт токен самоподписанному сертификату — сборка
+  падает на первом же `locale.pak` с `A timestamp was expected but was not found`.
+- Проверка: `codesign -dv /Applications/Orca.app | grep Authority` →
+  `Authority=Orca Local Signing`; `codesign --verify --deep --strict` → OK.
+- Разрешение «Локальная сеть» (System Settings → Privacy & Security → Local
+  Network) выдаётся приложению один раз и с постоянной подписью переживает
+  последующие пересборки. После смены сертификата — подтвердить заново.
+
 Полный цикл typecheck→bundles до `out/` — это `pnpm build:desktop`
 (запускается и как часть build:mac до момента падения packaging; результат
 сохраняется, повторно пересобирать не нужно).
@@ -237,6 +267,10 @@ git push origin main
 | Грабля                                                                  | Обход                                                                |
 | ----------------------------------------------------------------------- | -------------------------------------------------------------------- |
 | Линкер tapi 26.6 не читает tbd SDK 27.0 → падение node-gyp сборок       | `SDKROOT=.../MacOSX26.5.sdk` (раздел 1)                              |
+| Xcode 27.0 обновлён, лицензия не принята → сборки node-gyp падают        | CLT-тулчейн: `DEVELOPER_DIR=/Library/Developer/CommandLineTools` + `SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk` + `ORCA_REUSE_PREPARED_NATIVE_RUNTIME=1`; разово лечится `sudo xcodebuild -license accept` |
+| `check:code-quality:changed` ругается на перестилизацию `<Input>`        | плотный ввод — нативный `<input>` в обёртке (как `FileExplorerNameFilter`); активная кнопка — `variant={active ? 'secondary' : 'ghost'}`, не `bg-accent` |
+| SSH/локальная сеть из Орки: `No route to host` (EHOSTUNREACH), а из Terminal.app тот же `ssh` работает | **причина — ad-hoc подпись** (см. раздел 3): macOS не привязывает разрешение «Локальная сеть» к билду, чей cdhash меняется каждой сборкой. Лечится постоянным self-signed сертификатом + сборкой с `CSC_NAME`; тумблер Local Network выдаётся один раз и дальше переживает пересборки. Осиротевшее расширение Little Snitch (если его приложение удалено) — отдельная помеха, лечится только в System Settings → General → Login Items & Extensions → Network Extensions (CLI `systemextensionsctl uninstall` требует выключенного SIP, `gc` отдаёт Code=13) |
+| `zsh: killed` при запуске `cline` (и других npm-нативных бинарей) после авто-обновления | обновление приносит бинарь с несовпадающей подписью → ядро убивает процесс (`CODE SIGNING: rejecting invalid page … SIGKILL`). Лечение: `codesign --force --sign - <путь к бинарю>` (например `~/.nvm/versions/node/*/lib/node_modules/cline/node_modules/@cline/cli-darwin-arm64/bin/cline`) либо `npm i -g cline --force` |
 | Глобальный pnpm 11.24.0 ≠ требуемому 12.0.0                             | corepack сам качает 12.0.0 по `packageManager` — не трогать          |
 | `MaxListenersExceededWarning` на BrowserWindow (11 closed listeners)    | **исправлено 20.09** — хаб `window-closed-hub` (см. раздел 6.1)      |
 | Первая `pnpm install` падает на postinstall (rebuild-native-deps)       | повторить с SDKROOT — зависимость уже скачана, проходит              |
@@ -370,4 +404,6 @@ sudo chmod -h 755 /usr/local/bin/orca    # -h: менять сам симлин�
 | 20.09.2026 | Фикс MaxListenersExceededWarning: хаб `window-closed-hub.ts`, 12 точек подписки мигрированы, коммит `70822b7c` в форк |
 | 21.09.2026 | Фикс EACCES на readlink `/usr/local/bin/orca`: `chmod -h 755` при публикации симлинка + EACCES → `stale` вместо падения IPC (раздел 6.2) |
 | 21.09.2026 | Merge upstream v1.4.206 (merge `895b0564`), сборка 1.4.206-local установлена; pending-зип официального апдейтера удалён, бэкап 1.4.197 на Desktop |
-| 23.09.2026 | Merge upstream v1.4.209 (merge `f1e43ec7`), сборка 1.4.209-local установлена. Конфликты только в `package.json`/`release-mapping.json` (наших правок там нет, взята версия upstream). Все фиксы 6.1/6.2 проверены в asar, симлинк жив (0755), EACCES 0. Бэкапы: `~/Desktop/Orca-1.4.197-local-backup.app`, `~/Desktop/Orca-1.4.206-local-backup.app`. Процедура обновления описана в разделе 5.1, механизм апдейтера — 6.3 |
+| 23.09.2026 | Browse-режим в правом файловом дереве: путь-бар с Tab-автодополнением (общий префикс + список кандидатов, ↑/↓/Enter/Esc) и раскрытие папок стрелками инлайн (ленивая загрузка детей; refresh перечитывает раскрытые поддеревья), контекстное меню, inline rename/create, paste/duplicate/delete в Trash. Чтения и мутации — только через существующий `fs:authorizeExternalPath` (LRU-поддеревья). Новые файлы: `FileExplorerBrowseMode.tsx`, `FileExplorerBrowsePathSuggestions.tsx`, `use-file-explorer-browse{,-navigation,-mutations,-path-complete}.ts`, `file-explorer-browse-{mode,fs,operations,keyboard,clipboard,path-complete}.ts`. Сборка 1.4.209-local пересобрана и переустановлена; бэкап `~/Desktop/Orca-1.4.209-local-backup.app` |
+| 23.09.2026 | Локальные сборки переведены на постоянную подпись: self-signed сертификат `Orca Local Signing` (`~/.orca-local-signing`, identity в login keychain, trust для codeSign) + сборка с `CSC_NAME` и shim без `--timestamp`. Причина: при ad-hoc подписи cdhash меняется каждой сборкой, и macOS не привязывает к приложению разрешение «Локальная сеть» — ssh из терминалов Орки падал с `No route to host`, панель Remote Hosts показывала `connect EHOSTUNREACH`. После подписанной сборки и перезапуска Орки ssh к `srv-220` работает; разрешение Local Network выдаётся один раз и переживает пересборки. Попутно вычищен удалённый Little Snitch (launchd-плисты, `/Library/Application Support/Objective Development`, prefs; само расширение под SIP — снимать в System Settings → General → Login Items & Extensions → Network Extensions), и починен `cline` после авто-обновления (`codesign --force --sign -`, см. «грабли») |
+

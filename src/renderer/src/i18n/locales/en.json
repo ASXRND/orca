@@ -12170,7 +12170,8 @@
             "d95e30fe28": "Refresh Explorer",
             "6026b16950": "Collapse All",
             "693cbeadd0": "Search",
-            "c1f3f3ec70": "Search file contents"
+            "c1f3f3ec70": "Search file contents",
+            "9a1f2c33bd": "Browse any folder"
           },
           "FileExplorerTreeStatus": {
             "ce03835e1f": "No files in this workspace",
@@ -13532,6 +13533,28 @@
             "sourceMissing": "Transcript is no longer available",
             "metadataMatch": "Match in session metadata",
             "sourceActionsUnavailable": "The transcript source is unavailable."
+          },
+          "FileExplorerBrowseMode": {
+            "openFile": "Open",
+            "reveal": "Reveal in Finder",
+            "openFolder": "Open",
+            "newFile": "New File",
+            "newFolder": "New Folder",
+            "copy": "Copy",
+            "duplicate": "Duplicate",
+            "copyPath": "Copy Path",
+            "rename": "Rename",
+            "delete": "Delete",
+            "paste": "Paste",
+            "refresh": "Refresh",
+            "pathBar": "Browse path",
+            "goUp": "Up one level",
+            "backToProject": "Back to project",
+            "try": "Try:",
+            "symlink": "link",
+            "folderName": "Folder name",
+            "fileName": "File name",
+            "emptyFolder": "Empty folder"
           }
         }
       },

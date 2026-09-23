@@ -1,11 +1,13 @@
-import React, { useCallback, useMemo } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
 import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { basename } from '@/lib/path'
+import { browseParentOf } from './file-explorer-browse-mode'
 import { cn } from '@/lib/utils'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getVisibleFileExplorerWorktreePath } from './file-explorer-reset'
 import { FileExplorerBackgroundMenu } from './FileExplorerBackgroundMenu'
+import { FileExplorerBrowseMode } from './FileExplorerBrowseMode'
 import { FileExplorerFilesTreePane } from './FileExplorerFilesTreePane'
 import { FileExplorerNameFilter } from './FileExplorerNameFilter'
 import { FileExplorerQueryStrip } from './FileExplorerQueryStrip'
@@ -28,7 +30,15 @@ import { useFileExplorerTreePaneState } from './use-file-explorer-tree-pane-stat
 import { translate } from '@/i18n/i18n'
 import type { RightSidebarExplorerView } from '../../../../shared/ui-chrome-types'
 
+/** Default browse root: the parent of the worktree (like termix parentOfHome fallback). */
+function browseDefaultRoot(worktreePath: string | null): string {
+  return (worktreePath && browseParentOf(worktreePath)) || '/'
+}
+
 function FileExplorerFiles(): React.JSX.Element {
+  // Why: component-level, not store-level — browse mode is a transient local
+  // exploration state (like termix root), reset naturally when the panel unmounts.
+  const [browsePath, setBrowsePath] = useState<string | null>(null)
   const explorerView = useAppStore((s) => s.rightSidebarExplorerView)
   const showRightSidebarFiles = useAppStore((s) => s.showRightSidebarFiles)
   const showRightSidebarSearch = useAppStore((s) => s.showRightSidebarSearch)
@@ -218,6 +228,10 @@ function FileExplorerFiles(): React.JSX.Element {
           onToggleGitIgnoredFiles={toggleGitIgnoredFiles}
           showDotfiles={showDotfiles}
           onToggleDotfiles={handleToggleDotfiles}
+          browseActive={browsePath !== null}
+          onToggleBrowse={() =>
+            setBrowsePath((current) => (current !== null ? null : browseDefaultRoot(worktreePath)))
+          }
         />
         <FileExplorerQueryStrip view={explorerView} onSelectView={handleSelectExplorerView}>
           {/* Why: keep both query rows mounted and cross-fade so the Names/Contents
@@ -257,6 +271,18 @@ function FileExplorerFiles(): React.JSX.Element {
         {/* Why: the Files and Contents views share one body slot; layering them
            avoids remounting heavy virtualized panes while preserving full height. */}
         <div className="relative min-h-0 flex-1 overflow-hidden">
+          {/* Browse mode overlays the worktree tree; exiting returns to the project listing. */}
+          {browsePath ? (
+            <div className="absolute inset-0 z-10 flex min-h-0 flex-col bg-background">
+              {/* Why: keyed by the root — switching folders restarts browse state
+                 instead of syncing it from a prop through an effect. */}
+              <FileExplorerBrowseMode
+                key={browsePath}
+                browsePath={browsePath}
+                onExit={() => setBrowsePath(null)}
+              />
+            </div>
+          ) : null}
           <FileExplorerFilesTreePane
             activeRepo={activeRepo}
             worktreePath={worktreePath}
