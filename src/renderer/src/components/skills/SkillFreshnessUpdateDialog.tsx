@@ -174,10 +174,10 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
     if (!command) {
       return
     }
-    // Clipboard writes reject on a denied permission or an unfocused document;
-    // without this the button just never flips to "Copied".
-    void navigator.clipboard
-      .writeText(command)
+    // Browser clipboard writes are denied in this session, so the promise would reject every time
+    // and the button would never flip. Electron's IPC is the app's working route.
+    void window.api.ui
+      .writeClipboardText(command)
       .then(() => {
         setCopied(true)
         setTimeout(() => setCopied(false), 2000)

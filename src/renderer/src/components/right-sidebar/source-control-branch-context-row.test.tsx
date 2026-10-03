@@ -321,7 +321,8 @@ describe('SourceControlBranchContextRow branch line total', () => {
   it('keeps full precision instead of a compact 8.3k form', () => {
     const markup = renderWithLineTotal({ added: 123456, removed: 0, mergeBase: 'base' })
 
-    expect(markup).toContain(`+${(123456).toLocaleString()}`)
+    // The chip formats in the app's locale; the bare call follows LANG (ru-RU here).
+    expect(markup).toContain(`+${(123456).toLocaleString('en-US')}`)
     expect(markup).not.toContain('123k')
     expect(markup).not.toContain('123.5')
   })

@@ -111,7 +111,8 @@ describe('activateFileExplorerNode', () => {
         language: expect.any(String),
         mode: 'edit'
       },
-      { preview: true, focusEditor: true, suppressActiveRuntimeFallback: false }
+      // Explorer clicks each keep their own tab, so this open is never a preview one.
+      { preview: false, focusEditor: true, suppressActiveRuntimeFallback: false }
     )
   })
 
@@ -241,7 +242,8 @@ describe('activateFileExplorerNode', () => {
         filePath: '/repo/README.md',
         runtimeEnvironmentId: undefined
       }),
-      { preview: true, focusEditor: true, suppressActiveRuntimeFallback: true }
+      // Explorer clicks each keep their own tab, so this open is never a preview one.
+      { preview: false, focusEditor: true, suppressActiveRuntimeFallback: true }
     )
   })
 })

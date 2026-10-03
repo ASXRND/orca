@@ -181,7 +181,9 @@ export function useFileExplorerBrowseActions(
           break
         }
         case 'copyPath': {
-          void navigator.clipboard.writeText(targetPath ?? currentDir)
+          // The session denies clipboard-write, so navigator.clipboard silently rejects — go
+          // through Electron's IPC like every other copy in the app.
+          void window.api.ui.writeClipboardText(targetPath ?? currentDir)
           break
         }
         case 'rename': {
