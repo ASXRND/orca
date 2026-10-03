@@ -256,7 +256,16 @@ export function FileExplorerBrowseMode({
                     selectedPath === row.path && 'bg-accent text-accent-foreground'
                   )}
                   style={{ paddingLeft: `${row.depth * 16 + 8}px` }}
-                  onClick={() => setSelectedPath(row.path)}
+                  onClick={() => {
+                    setSelectedPath(row.path)
+                    // Why: the project tree opens a file on a single click (preview
+                    // tab), so browse matches it instead of requiring a gesture the
+                    // user has no reason to expect. Folders still just select here;
+                    // the chevron owns expansion.
+                    if (!row.entry.isDirectory) {
+                      openTarget(row.path, row.entry)
+                    }
+                  }}
                   onDoubleClick={() => openTarget(row.path, row.entry)}
                   onContextMenu={(event) => {
                     event.preventDefault()
