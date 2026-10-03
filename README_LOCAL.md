@@ -171,6 +171,31 @@ pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --a
 
 ## 4. Проверки после правок кода
 
+> **⚠️ ГЛАВНОЕ ПРАВИЛО — не возвращаться к нему больше ни разу**
+>
+> После **любой** правки кода: проверки (блок ниже) → **сразу пересобрать
+> приложение → проверить фикс внутри asar → установить в `/Applications` →
+> перезапустить**. Только после этого любой результат теста считается реальным.
+>
+> Почему: `electron-builder` **только упаковывает готовый `out/`**, исходники
+> он не компилирует. Правка в `src/` без пересборки = в установленной Orca
+> старый код, и фикс «не работает» — а мы вместо этого ищем сломавшийся код
+> в манифесте. Это уже стоило нескольких циклов ложных диагнозов (03.10.2026).
+>
+> Собирать **только полным циклом**, частичная пересборка ломает `out/`:
+>
+> ```bash
+> # 1. полные бандлы (typecheck → relay → cli → electron-vite → verify)
+> pnpm run build:desktop
+> # 2. упаковка arm64 — env из раздела 3 (codesign-shim, CSC_NAME, SDKROOT…)
+> pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --arm64
+> # 3. фикс внутри asar ДО установки (раздел 5.1, шаг 8), установка и перезапуск (раздел 3)
+> ```
+>
+> Одного `build:electron-vite` **недостаточно**: `out/cli` останется от старой
+> версии и упаковка упадёт на `[verify-skills-cli-runtime] missing runtime import`
+> — это значит рассинхрон `out/cli` и `out/main`, а не битый код.
+
 ```bash
 pnpm tc                      # typecheck
 pnpm test [путь/к/файлу]     # тесты (vitest)
@@ -274,6 +299,8 @@ git push origin main
 | Глобальный pnpm 11.24.0 ≠ требуемому 12.0.0                             | corepack сам качает 12.0.0 по `packageManager` — не трогать          |
 | `MaxListenersExceededWarning` на BrowserWindow (11 closed listeners)    | **исправлено 20.09** — хаб `window-closed-hub` (см. раздел 6.1)      |
 | Первая `pnpm install` падает на postinstall (rebuild-native-deps)       | повторить с SDKROOT — зависимость уже скачана, проходит              |
+| Правка в `src/` сделана, а в приложении ничего не изменилось («фикс не работает») | `electron-builder` **не компилирует** исходники — только упаковывает `out/`. Обязателен полный `pnpm run build:desktop` + упаковка + установка (раздел 4) |
+| Упаковка падает: `[verify-skills-cli-runtime] missing runtime import` | рассинхрон `out/cli` и `out/main` из-за частичной пересборки → `pnpm run build:desktop`, потом упаковка |
 | `pnpm build:mac` падает: x64-вариантов нативных модулей нет (universal) | `pnpm exec electron-builder … --mac --arm64` напрямую (см. раздел 3) |
 | `codesign --verify` ругается: `no resources but signature indicates…`   | норма для ad-hoc; проверять `codesign -dv`, запуск работает          |
 | `EACCES: permission denied, readlink '/usr/local/bin/orca'` в UI         | **исправлено 21.09** — права CLI-симлинка, см. раздел 6.2            |
