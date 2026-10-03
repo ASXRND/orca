@@ -32,7 +32,8 @@ export type UseFileExplorerBrowsePathCompleteResult = {
  * remain, offer the classic list to pick from with the arrow keys.
  */
 export function useFileExplorerBrowsePathComplete(
-  nav: Pick<UseFileExplorerBrowseNavigationResult, 'pathInput' | 'setPathInput' | 'readDir'>
+  nav: Pick<UseFileExplorerBrowseNavigationResult, 'pathInput' | 'setPathInput' | 'readDir'>,
+  openFile: (path: string) => void
 ): UseFileExplorerBrowsePathCompleteResult {
   const { pathInput, setPathInput, readDir } = nav
   const [suggestions, setSuggestions] = useState<BrowsePathSuggestion[]>([])
@@ -98,7 +99,7 @@ export function useFileExplorerBrowsePathComplete(
     [suggestions.length]
   )
 
-  /** Navigate into a directory pick; hand a file pick to the OS (termix). */
+  /** Navigate into a directory pick; a file pick opens in the editor (termix). */
   const pickSuggestion = useCallback(
     (index: number) => {
       const suggestion = suggestions[index]
@@ -111,9 +112,9 @@ export function useFileExplorerBrowsePathComplete(
         void readDir(suggestion.path)
         return
       }
-      void window.api.shell.openPath(suggestion.path)
+      openFile(suggestion.path)
     },
-    [suggestions, setPathInput, readDir]
+    [openFile, suggestions, setPathInput, readDir]
   )
 
   return {

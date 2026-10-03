@@ -1,6 +1,10 @@
 import type { KeyboardEvent as ReactKeyboardEvent, RefObject } from 'react'
 import { useCallback, useState } from 'react'
+import { toast } from 'sonner'
+import { useAppStore } from '@/store'
+import { useActiveWorktree } from '@/store/selectors'
 import type { BrowseEntry, BrowseRow } from './file-explorer-browse-mode'
+import { openBrowseFileInEditor } from './file-explorer-browse-open'
 import {
   browseDeletePlan,
   browseDuplicatePlan,
@@ -29,6 +33,8 @@ export type UseFileExplorerBrowseActionsResult = {
   inlineInputRef: RefObject<HTMLInputElement | null>
   hasClipboard: boolean
   openTarget: (path: string, entry: BrowseEntry) => void
+  /** File-only open in the editor, shared with the path-bar suggestion pick. */
+  openFileAtPath: (path: string) => void
   revealEntry: (targetPath: string) => void
   startInlineInput: (kind: 'newFile' | 'newFolder', dirPath: string) => void
   submitInline: () => void
@@ -47,6 +53,9 @@ export function useFileExplorerBrowseActions(
 ): UseFileExplorerBrowseActionsResult {
   const { currentDir, rows, readDir, setPathInput, selectedPath, readNamesInDir } = nav
   const [menu, setMenu] = useState<BrowseMenuPoint | null>(null)
+  const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const openFile = useAppStore((s) => s.openFile)
+  const worktreePath = useActiveWorktree()?.path ?? null
   const mutations = useFileExplorerBrowseMutations(nav)
   const {
     busy,
@@ -62,7 +71,31 @@ export function useFileExplorerBrowseActions(
     runMutation
   } = mutations
 
-  /** Open an entry: folders navigate the browse list, files go to the OS. */
+  /**
+   * Open a browsed file in Orca's editor (termix local-file tab parity); falls
+   * back to the OS handler when no workspace owns the tab.
+   */
+  const openFileAtPath = useCallback(
+    (path: string) => {
+      if (!activeWorktreeId) {
+        void window.api.shell.openPath(path)
+        return
+      }
+      void openBrowseFileInEditor({
+        filePath: path,
+        worktreeId: activeWorktreeId,
+        worktreePath,
+        deps: {
+          authorizeExternalPath: window.api.fs.authorizeExternalPath,
+          openFile,
+          onError: (message) => toast.error(message)
+        }
+      })
+    },
+    [activeWorktreeId, openFile, worktreePath]
+  )
+
+  /** Open an entry: folders navigate the browse list, files go to the editor. */
   const openTarget = useCallback(
     (path: string, entry: BrowseEntry) => {
       if (entry.isDirectory) {
@@ -70,9 +103,9 @@ export function useFileExplorerBrowseActions(
         void readDir(path)
         return
       }
-      void window.api.shell.openPath(path)
+      openFileAtPath(path)
     },
-    [readDir, setPathInput]
+    [openFileAtPath, readDir, setPathInput]
   )
 
   const revealEntry = useCallback((targetPath: string) => {
@@ -93,6 +126,13 @@ export function useFileExplorerBrowseActions(
         case 'open': {
           if (row && entry) {
             openTarget(row.path, entry)
+          }
+          break
+        }
+        case 'openExternal': {
+          // termix keeps the OS handler as a separate opt-in action.
+          if (targetPath && entry && !entry.isDirectory) {
+            void window.api.shell.openPath(targetPath)
           }
           break
         }
@@ -220,6 +260,7 @@ export function useFileExplorerBrowseActions(
     inlineInputRef,
     hasClipboard: getCopiedEntry() !== null,
     openTarget,
+    openFileAtPath,
     revealEntry,
     startInlineInput,
     submitInline,

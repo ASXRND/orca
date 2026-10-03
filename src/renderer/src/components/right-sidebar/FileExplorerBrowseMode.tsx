@@ -63,6 +63,7 @@ export function FileExplorerBrowseMode({
     inlineInputRef,
     hasClipboard,
     openTarget,
+    openFileAtPath,
     revealEntry,
     startInlineInput,
     submitInline,
@@ -70,7 +71,7 @@ export function FileExplorerBrowseMode({
     handleMenuAction,
     handleListKeyDown
   } = actions
-  const complete = useFileExplorerBrowsePathComplete(nav)
+  const complete = useFileExplorerBrowsePathComplete(nav, openFileAtPath)
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">

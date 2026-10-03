@@ -13745,6 +13745,7 @@
           },
           "FileExplorerBrowseMode": {
             "openFile": "Open",
+            "openExternally": "Open externally",
             "reveal": "Reveal in Finder",
             "openFolder": "Open",
             "newFile": "New File",

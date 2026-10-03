@@ -1,5 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
+  AppWindow,
   ClipboardPaste,
   Copy,
   CopyPlus,
@@ -18,6 +19,7 @@ const VIEWPORT_PADDING = 8
 
 export type BrowseMenuAction =
   | 'open'
+  | 'openExternal'
   | 'copy'
   | 'paste'
   | 'duplicate'
@@ -104,6 +106,14 @@ export function FileExplorerBrowseContextMenu({
         icon: <ExternalLink className="size-3" />,
         label: translate('auto.components.right.sidebar.FileExplorerBrowseMode.openFile', 'Open'),
         shortcut: '⏎'
+      },
+      {
+        action: 'openExternal',
+        icon: <AppWindow className="size-3" />,
+        label: translate(
+          'auto.components.right.sidebar.FileExplorerBrowseMode.openExternally',
+          'Open externally'
+        )
       },
       {
         action: 'reveal',
@@ -216,6 +226,7 @@ export function FileExplorerBrowseContextMenu({
   // Group id per action so separators fall between logical sections.
   const groupOf: Record<BrowseMenuAction, number> = {
     open: 0,
+    openExternal: 0,
     newFile: 1,
     newFolder: 1,
     reveal: 2,
