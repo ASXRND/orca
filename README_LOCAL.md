@@ -21,21 +21,21 @@
 
 ---
 
-## 0. Статус на 23.09.2026
+## 0. Статус на 03.10.2026
 
 | Что                                        | Состояние                                                                                                                                           |
 | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/Applications/Orca.app`                   | собрано из этого клона (`dist/mac-arm64/Orca.app`), ad-hoc подпись, **запускается и работает**                                                      |
+| `/Applications/Orca.app`                   | собрано из этого клона (`dist/mac-arm64/Orca.app`), подпись `Orca Local Signing`, **запускается и работает**                                        |
 | Артефакты сборки                           | `dist/orca-macos-arm64.dmg` (211 МБ), `dist/Orca-…-arm64-mac.zip`, исходник `dist/mac-arm64/Orca.app`                                               |
-| Версия сборки                              | `1.4.209-local` (asar-манифест + About; данные: `~/Library/Application Support/orca`)                                                                         |
+| Версия сборки                              | `1.4.219-local` (asar-манифест + About; данные: `~/Library/Application Support/orca`)                                                                         |
 | Данные приложения                          | `~/Library/Application Support/orca` (создаются автоматически)                                                                                      |
 | dev-режим (`pnpm dev`)                     | работает (проверено 19.09)                                                                                                                          |
 | `codesign --verify /Applications/Orca.app` | выдаёт `code has no resources but signature indicates they must be present` — НЕ мешает запуску, особенность ad-hoc; проверять через `codesign -dv` |
 | Форк                                       | https://github.com/ASXRND/orca, правки в `main` + этот файл                                                                                         |
-| Наши коммиты                               | `70822b7c` (MaxListeners-хаб, 6.1), `12b2e5f7` (EACCES CLI, 6.2), merge-коммиты апстримов: `895b0564` (v1.4.206), `f1e43ec7` (v1.4.209)             |
+| Наши коммиты                               | `70822b7c` (MaxListeners-хаб, 6.1), `12b2e5f7` (EACCES CLI, 6.2), merge апстримов: `895b0564` (v1.4.206), `f1e43ec7` (v1.4.209), `be0b343c1` (v1.4.219); дальше: `525b8ada1`/`8b0e7622e`/`89623b51c` (browse-вкладки), `bfdc259e8` (Cmd+C в редакторе), `9e88f88a9` (browse на SSH-хосте), `d380e0954` (правило пересборки), русская локализация (раздел 8)             |
 | **Процедура обновления** (шаг за шагом)          | раздел 5.1 — fetch тега → merge → build → проверить asar → установить с бэкапом           |
 | **Механизм апдейтера / почему НЕ ставить офиц. релиз** | раздел 6.3                                                                          |
-| **Бэкапы для отката**                            | `~/Desktop/Orca-1.4.197-local-backup.app`, `~/Desktop/Orca-1.4.206-local-backup.app`     |
+| **Бэкапы для отката**                            | `~/Desktop/Orca-1.4.197-local-backup.app`, `~/Desktop/Orca-1.4.206-local-backup.app`, `~/Desktop/Orca-1.4.219-local-pre-ru-backup.app` (до русской локализации)     |
 
 ---
 
@@ -157,8 +157,10 @@ pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --a
 - `codesign-shim` нужен потому, что electron-builder добавляет `--timestamp`, а
   Apple timestamp-сервер не выдаёт токен самоподписанному сертификату — сборка
   падает на первом же `locale.pak` с `A timestamp was expected but was not found`.
-- Проверка: `codesign -dv /Applications/Orca.app | grep Authority` →
+- Проверка: `codesign -dvv /Applications/Orca.app | grep Authority` →
   `Authority=Orca Local Signing`; `codesign --verify --deep --strict` → OK.
+  Важно: `codesign -dv` (одна `v`) строку `Authority` НЕ печатает вовсе — нужен
+  `-dvv` или выше (проверено 03.10.2026, легко принять за «подписи нет»).
 - Разрешение «Локальная сеть» (System Settings → Privacy & Security → Local
   Network) выдаётся приложению один раз и с постоянной подписью переживает
   последующие пересборки. После смены сертификата — подтвердить заново.
@@ -166,6 +168,53 @@ pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --a
 Полный цикл typecheck→bundles до `out/` — это `pnpm build:desktop`
 (запускается и как часть build:mac до момента падения packaging; результат
 сохраняется, повторно пересобирать не нужно).
+
+### 3.1. Две грабли сборки на этой машине (03.10.2026)
+
+**1. `pnpm build:desktop` падает последним шагом — `build:mobile-web`.**
+Ему нужны `mobile/node_modules` (Expo / `react-native-web`), а в клоне их нет:
+
+```
+app/_layout.web.tsx:2:54: ERROR: Could not resolve "react-native-web"
+[ELIFECYCLE] Command failed with exit code 1.
+```
+
+Это **не** повод для повторной сборки: typecheck → relay → cli → electron-vite →
+verify:built-skills-cli → build:web-from-renderer к этому моменту уже прошли, `out/`
+собран целиком (в `out/` есть и `mobile-web` от прошлых сборок). Дальше — нативные
+хелперы и упаковка, `out/` пересобирать не нужно.
+
+**2. `pnpm run build:computer-macos` падает на `lipo`.**
+Скрипт собирает universal (arm64 + x86_64) и склеивает через `lipo -create`, но на
+этой машине x86_64-срез компилируется fat-бинарём (в нём уже есть arm64):
+
+```
+lipo: same architectures (arm64) found in '…/arm64-apple-macosx/release/orca-computer-use-macos'
+  and '…/x86_64-apple-macosx/release/orca-computer-use-macos'
+```
+
+Последствие: `.build/release` — это symlink на `.build/out/Products/Release`, там
+остаётся частично записанный x86_64-бинарь, а `Orca Computer Use.app` не собирается.
+electron-builder берёт его из `native/computer-use-macos/.build/release/Orca Computer Use.app`,
+поэтому без ручной сборки хелпер просто не попадёт в пакет (упаковка при этом пройдёт).
+
+Обход — arm64-only, вручную:
+
+```bash
+pkg=native/computer-use-macos
+rm -f "$pkg/.build/release/orca-computer-use-macos"
+cp "$pkg/.build/arm64-apple-macosx/release/orca-computer-use-macos" "$pkg/.build/release/orca-computer-use-macos"
+chmod 755 "$pkg/.build/release/orca-computer-use-macos"      # lipo -archs → arm64
+# собрать .app (шаблон Info.plist — из config/scripts/build-computer-macos.mjs):
+app="$pkg/.build/release/Orca Computer Use.app"
+mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
+cp "$pkg/.build/release/orca-computer-use-macos" "$app/Contents/MacOS/"
+cp resources/build/icon.icns "$app/Contents/Resources/AppIcon.icns"
+codesign --force --deep --sign "Orca Local Signing" "$app"   # без --timestamp (см. раздел 3)
+```
+
+Проверка: `codesign -dvv "$app"` → `Authority=Orca Local Signing`,
+`codesign --verify --deep --strict "$app"` → OK.
 
 ---
 
@@ -433,4 +482,62 @@ sudo chmod -h 755 /usr/local/bin/orca    # -h: менять сам симлин�
 | 21.09.2026 | Merge upstream v1.4.206 (merge `895b0564`), сборка 1.4.206-local установлена; pending-зип официального апдейтера удалён, бэкап 1.4.197 на Desktop |
 | 23.09.2026 | Browse-режим в правом файловом дереве: путь-бар с Tab-автодополнением (общий префикс + список кандидатов, ↑/↓/Enter/Esc) и раскрытие папок стрелками инлайн (ленивая загрузка детей; refresh перечитывает раскрытые поддеревья), контекстное меню, inline rename/create, paste/duplicate/delete в Trash. Чтения и мутации — только через существующий `fs:authorizeExternalPath` (LRU-поддеревья). Новые файлы: `FileExplorerBrowseMode.tsx`, `FileExplorerBrowsePathSuggestions.tsx`, `use-file-explorer-browse{,-navigation,-mutations,-path-complete}.ts`, `file-explorer-browse-{mode,fs,operations,keyboard,clipboard,path-complete}.ts`. Сборка 1.4.209-local пересобрана и переустановлена; бэкап `~/Desktop/Orca-1.4.209-local-backup.app` |
 | 23.09.2026 | Локальные сборки переведены на постоянную подпись: self-signed сертификат `Orca Local Signing` (`~/.orca-local-signing`, identity в login keychain, trust для codeSign) + сборка с `CSC_NAME` и shim без `--timestamp`. Причина: при ad-hoc подписи cdhash меняется каждой сборкой, и macOS не привязывает к приложению разрешение «Локальная сеть» — ssh из терминалов Орки падал с `No route to host`, панель Remote Hosts показывала `connect EHOSTUNREACH`. После подписанной сборки и перезапуска Орки ssh к `srv-220` работает; разрешение Local Network выдаётся один раз и переживает пересборки. Попутно вычищен удалённый Little Snitch (launchd-плисты, `/Library/Application Support/Objective Development`, prefs; само расширение под SIP — снимать в System Settings → General → Login Items & Extensions → Network Extensions), и починен `cline` после авто-обновления (`codesign --force --sign -`, см. «грабли») |
+| 03.10.2026 | Merge апстрима v1.4.219 (`be0b343c1`), конфликты разрешены; сборка `1.4.219-local` установлена |
+| 03.10.2026 | Browse-режим: файлы открываются в редакторе (`525b8ada1`), одиночный клик как в дереве (`8b0e7622e`), каждая кликнутая вкладка постоянная вместо предпросмотра (`89623b51c`), работа на SSH-хосте рабочей области (`9e88f88a9` + `file-explorer-browse-target.ts`, 4 теста) |
+| 03.10.2026 | Cmd+C в редакторе (`bfdc259e8`): копирование из файла не срабатывало, пока фокус был у меню приложения — `setup-editor-app-menu-clipboard.ts` |
+| 03.10.2026 | Правило «правка кода → пересборка → установка» зафиксировано в разделе 4 (`d380e0954`); грабли сборки задокументированы в разделе 3.1 |
+| 03.10.2026 | **Русский язык интерфейса** (раздел 8): `ru.json`, 6 точек регистрации, тесты чисто |
+| 03.10.2026 | «Copy Path» в browse не копировал вообще: `navigator.clipboard.writeText` отклоняется политикой разрешений главного окна, а `void` глотал ошибку → `window.api.ui.writeClipboardText`; та же поломка в `SkillFreshnessUpdateDialog`. Добавлен ratchet-тест `src/renderer/src/no-browser-clipboard-write.test.ts`. Отдельно починены два теста, не обновлённых коммитом `89623b51c` (`useFileExplorerHandlers.test.ts`) и упававших на машине с `LANG=ru_RU.UTF-8` (`source-control-branch-context-row.test.tsx`) |
+
+
+---
+
+## 8. Локализация интерфейса: русский язык (03.10.2026)
+
+Русский добавлен как полноценная встроенная локаль рядом с `en/zh/ko/ja/es/fr`.
+Переключение: **Settings → Appearance → Language → «Русский»**; при «System»
+берётся системная локаль (то есть на русской macOS интерфейс станет русским сам).
+
+**Шесть точек регистрации — добавление локали это не только файл перевода:**
+
+| Файл | Что там |
+| --- | --- |
+| `src/shared/ui-language.ts` | `UI_LANGUAGE_RUSSIAN = 'ru'`, `BuiltInUiLanguage`, набор `UI_LANGUAGE_VALUES` |
+| `src/shared/ui-locale.ts` | `'ru'` в `SUPPORTED_UI_LOCALES` и ветка в `resolveUiLocale` |
+| `src/renderer/src/i18n/i18n.ts` | ленивый загрузчик `ru: () => import('./locales/ru.json')` |
+| `src/main/i18n/main-i18n.ts` | тот же загрузчик для main-процесса |
+| `src/renderer/src/i18n/supported-languages.ts` | пункт выпадающего списка + нативная метка «Русский» |
+| `src/renderer/src/i18n/locales/en.json` | ключ `settings.appearance.language.russian` |
+
+Оба загрузчика типизированы как `Record<Exclude<SupportedUiLocale, 'en'>, …>`,
+поэтому пропущенный код не пройдёт: `pnpm tc` падает.
+
+**Частичный каталог — это норма.** `ru.json` сейчас 159 строк (настройки, меню,
+проводник, tray, уведомления, меню browse). Остальное падает на английский через
+`fallbackLng: 'en'`, а строки вида `translate(key, 'English default')` — на
+английский дефолт из вызова. Сплошного теста на полноту локалей намеренно нет
+(`locale-english-regression.test.ts` покрывает es/ja/ko/zh и прямо пишет, что
+blanket-gate не вводится). **`en.json` не трогать**, кроме метки самого языка.
+
+**Дописать перевод** — правкой `ru.json` (2 пробела, ключи сортируются как в
+`en.json`). Проверка, что все ключи реально существуют в английском:
+
+```bash
+node -e "const en=require('./src/renderer/src/i18n/locales/en.json');const ru=require('./src/renderer/src/i18n/locales/ru.json');
+const flat=(o,p='')=>Object.entries(o).flatMap(([k,v])=>typeof v==='object'?flat(v,p+k+'.'):[[p+k,v]]);
+const keys=new Set(flat(en).map(([k])=>k));const bad=flat(ru).map(([k])=>k).filter(k=>!keys.has(k));
+console.log('ключей:',flat(ru).length,'| лишних:',bad)"
+```
+
+**Проверка после сборки.** Русский попадает в пакет двумя ленивыми чанками
+(main и renderer). Ищи их инструментом asar, а не грепом: `grep -a` по
+117-МБ бинарнику находит ASCII, но молчит на кириллице (проверено 03.10.2026 —
+текст лежит в файле, `grep` его не показывает), поэтому проверять через распаковку:
+
+```bash
+node -e "const a=require('@electron/asar');const f='dist/mac-arm64/Orca.app/Contents/Resources/app.asar';
+console.log(a.listPackage(f).filter(x=>/\/ru-[A-Za-z0-9_-]+\.js$/.test(x)))"
+```
+
+Проверять нужно и установленную копию: `/Applications/Orca.app/Contents/Resources/app.asar`.
 
