@@ -12,6 +12,7 @@ import { ensureMarkdownDocCompletionProvider } from './monaco-markdown-doc-compl
 import { clampMonacoAutoHeight } from './monaco-auto-height'
 import { installMonacoE2EProbe } from './monaco-e2e-probe'
 import { matchesPendingEditorFocusRequest } from './pending-editor-focus-request'
+import { setupEditorAppMenuClipboard } from './setup-editor-app-menu-clipboard'
 import { installMonacoEditorInputBindings } from './monaco-editor-input-bindings'
 import type { MonacoEditorMountParams } from './monaco-editor-mount-params'
 import {
@@ -120,6 +121,7 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
       }
 
       setupCopy(editorInstance, monaco, filePath, propsRef)
+      setupEditorAppMenuClipboard(editorInstance)
       unregisterFileSearchSelectionRef.current?.()
       unregisterFileSearchSelectionRef.current = registerFileSearchSelectedTextProvider(() => {
         if (!editorInstance.hasTextFocus()) {

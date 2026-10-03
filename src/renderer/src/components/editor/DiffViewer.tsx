@@ -5,6 +5,7 @@ import { useAppStore } from '@/store'
 import { diffViewStateCache, setWithLRU } from '@/lib/scroll-cache'
 import { computeDiffEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
 import { useContextualCopySetup } from './useContextualCopySetup'
+import { setupEditorAppMenuClipboard } from './setup-editor-app-menu-clipboard'
 import { selectWorktreeDiffComments } from '@/store/worktree-diff-comments-selector'
 import { useDiffCommentDecorator } from '../diff-comments/useDiffCommentDecorator'
 import { toast } from 'sonner'
@@ -202,6 +203,8 @@ export default function DiffViewer({
 
       setupCopy(originalEditor, monaco, filePath, propsRef)
       setupCopy(modifiedEditor, monaco, filePath, propsRef)
+      setupEditorAppMenuClipboard(originalEditor)
+      setupEditorAppMenuClipboard(modifiedEditor)
       setModifiedEditor(modifiedEditor)
 
       // Why: restore full diff view state (not just scrollTop) so cursor/selection stay consistent across both panes.
