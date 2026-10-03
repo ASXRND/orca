@@ -29,7 +29,7 @@ describe('openBrowseFileInEditor', () => {
         runtimeEnvironmentId: null,
         mode: 'edit'
       }),
-      { preview: true, focusEditor: true, suppressActiveRuntimeFallback: true }
+      { preview: false, focusEditor: true, suppressActiveRuntimeFallback: true }
     )
     expect(deps.onError).not.toHaveBeenCalled()
   })

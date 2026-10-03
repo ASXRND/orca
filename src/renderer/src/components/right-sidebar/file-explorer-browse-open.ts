@@ -67,7 +67,9 @@ export async function openBrowseFileInEditor(args: {
       mode: 'edit'
     },
     {
-      preview: true,
+      // Why: each browsed file keeps its own tab — a preview tab would be reused
+      // by the next click and drop the file the user was reading.
+      preview: false,
       // Why: picking a file in browse mode is an explicit focus handoff, the same
       // contract as activating a row in the project tree.
       focusEditor: true,

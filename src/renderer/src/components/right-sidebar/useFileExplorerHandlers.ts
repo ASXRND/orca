@@ -145,7 +145,9 @@ export async function activateFileExplorerNode(args: {
       mode: 'edit'
     },
     {
-      preview: true,
+      // Why: this fork gives every Explorer file its own tab — a preview tab is
+      // reused by the next click, which closes what the user was reading.
+      preview: false,
       // Why: activating an Explorer file is a focus handoff even if the rich
       // editor finishes mounting after the row receives browser focus.
       focusEditor: true,
