@@ -10,6 +10,7 @@ import {
   type BrowseRow
 } from './file-explorer-browse-mode'
 import { readBrowseDirEntries } from './file-explorer-browse-fs'
+import { useBrowseTarget } from './file-explorer-browse-target'
 
 /** Inline tree of browse mode: expanded folder paths and their cached listings. */
 type BrowseTreeState = {
@@ -53,6 +54,9 @@ export function useFileExplorerBrowseNavigation(
 ): UseFileExplorerBrowseNavigationResult {
   const [pathInput, setPathInput] = useState(browsePath)
   const [currentDir, setCurrentDir] = useState(browsePath)
+  // Why: the active workspace's SSH host scopes every read below, so the hook
+  // needs no prop — and its memoised identity keeps the callbacks below stable.
+  const target = useBrowseTarget()
   const [entries, setEntries] = useState<BrowseEntry[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -79,7 +83,7 @@ export function useFileExplorerBrowseNavigation(
     await Promise.all(
       [...expandedPaths].map(async (path) => {
         try {
-          nextChildren[path] = sortBrowseEntriesWithFiles(await readBrowseDirEntries(path))
+          nextChildren[path] = sortBrowseEntriesWithFiles(await readBrowseDirEntries(path, target))
         } catch {
           // The expanded folder is gone — drop it instead of keeping a ghost.
           delete nextChildren[path]
@@ -88,14 +92,14 @@ export function useFileExplorerBrowseNavigation(
       })
     )
     updateTree({ expandedPaths: nextExpanded, childrenByPath: nextChildren })
-  }, [updateTree])
+  }, [target, updateTree])
 
   const readDir = useCallback(
     async (dir: string) => {
       setLoading(true)
       setError(null)
       try {
-        const listing = await readBrowseDirEntries(dir)
+        const listing = await readBrowseDirEntries(dir, target)
         setEntries(sortBrowseEntriesWithFiles(listing))
         const navigated = currentDirRef.current !== dir
         currentDirRef.current = dir
@@ -113,7 +117,7 @@ export function useFileExplorerBrowseNavigation(
         setLoading(false)
       }
     },
-    [reloadExpanded, updateTree]
+    [reloadExpanded, target, updateTree]
   )
 
   useEffect(() => {
@@ -136,7 +140,7 @@ export function useFileExplorerBrowseNavigation(
       }
       void (async () => {
         try {
-          const children = sortBrowseEntriesWithFiles(await readBrowseDirEntries(path))
+          const children = sortBrowseEntriesWithFiles(await readBrowseDirEntries(path, target))
           const current = treeStateRef.current
           updateTree({
             expandedPaths: new Set(current.expandedPaths).add(path),
@@ -147,7 +151,7 @@ export function useFileExplorerBrowseNavigation(
         }
       })()
     },
-    [updateTree]
+    [target, updateTree]
   )
 
   const rows = useMemo(
@@ -165,7 +169,7 @@ export function useFileExplorerBrowseNavigation(
         return cached.map((entry) => entry.name)
       }
       try {
-        return sortBrowseEntriesWithFiles(await readBrowseDirEntries(dirPath)).map(
+        return sortBrowseEntriesWithFiles(await readBrowseDirEntries(dirPath, target)).map(
           (entry) => entry.name
         )
       } catch {
@@ -173,7 +177,7 @@ export function useFileExplorerBrowseNavigation(
         return []
       }
     },
-    [currentDir, entries, treeState.childrenByPath]
+    [currentDir, entries, target, treeState.childrenByPath]
   )
 
   const submitPath = useCallback(() => {

@@ -33,19 +33,25 @@ export async function openBrowseFileInEditor(args: {
   worktreeId: string
   /** Active worktree root; a file under it keeps a relative path for display. */
   worktreePath: string | null
+  /** SSH target the list was browsed through; absent means local browsing. */
+  connectionId?: string
   deps: BrowseFileOpenDeps
 }): Promise<void> {
-  const { filePath, worktreeId, worktreePath, deps } = args
-  try {
-    await deps.authorizeExternalPath({ targetPath: filePath })
-  } catch {
-    deps.onError(
-      translate(
-        'auto.components.right.sidebar.fileExplorerBrowseOpen.notAuthorized',
-        "Couldn't open file — path not authorized."
+  const { filePath, worktreeId, worktreePath, connectionId, deps } = args
+  // Why: allowed-roots govern local reads only — on an SSH target the connection
+  // is already the boundary, so there is nothing to authorize before the tab.
+  if (!connectionId) {
+    try {
+      await deps.authorizeExternalPath({ targetPath: filePath })
+    } catch {
+      deps.onError(
+        translate(
+          'auto.components.right.sidebar.fileExplorerBrowseOpen.notAuthorized',
+          "Couldn't open file — path not authorized."
+        )
       )
-    )
-    return
+      return
+    }
   }
   deps.openFile(
     {

@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { useActiveWorktree } from '@/store/selectors'
+import { isRemoteBrowseTarget, useBrowseTarget } from './file-explorer-browse-target'
 import type { BrowseEntry, BrowseRow } from './file-explorer-browse-mode'
 import { openBrowseFileInEditor } from './file-explorer-browse-open'
 import {
@@ -56,6 +57,7 @@ export function useFileExplorerBrowseActions(
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const openFile = useAppStore((s) => s.openFile)
   const worktreePath = useActiveWorktree()?.path ?? null
+  const target = useBrowseTarget()
   const mutations = useFileExplorerBrowseMutations(nav)
   const {
     busy,
@@ -85,6 +87,7 @@ export function useFileExplorerBrowseActions(
         filePath: path,
         worktreeId: activeWorktreeId,
         worktreePath,
+        connectionId: target.connectionId,
         deps: {
           authorizeExternalPath: window.api.fs.authorizeExternalPath,
           openFile,
@@ -92,7 +95,7 @@ export function useFileExplorerBrowseActions(
         }
       })
     },
-    [activeWorktreeId, openFile, worktreePath]
+    [activeWorktreeId, openFile, target.connectionId, worktreePath]
   )
 
   /** Open an entry: folders navigate the browse list, files go to the editor. */
@@ -108,9 +111,16 @@ export function useFileExplorerBrowseActions(
     [openFileAtPath, readDir, setPathInput]
   )
 
-  const revealEntry = useCallback((targetPath: string) => {
-    void window.api.shell.openInFileManager(targetPath)
-  }, [])
+  /** Finder is a local affordance: a remote path has no Finder to reveal it in. */
+  const revealEntry = useCallback(
+    (targetPath: string) => {
+      if (isRemoteBrowseTarget(target)) {
+        return
+      }
+      void window.api.shell.openInFileManager(targetPath)
+    },
+    [target]
+  )
 
   const handleMenuAction = useCallback(
     (action: BrowseMenuAction) => {
@@ -130,8 +140,9 @@ export function useFileExplorerBrowseActions(
           break
         }
         case 'openExternal': {
-          // termix keeps the OS handler as a separate opt-in action.
-          if (targetPath && entry && !entry.isDirectory) {
+          // termix keeps the OS handler as a separate opt-in action; a remote
+          // path lives on the host, so there is no local handler to hand it to.
+          if (targetPath && entry && !entry.isDirectory && !isRemoteBrowseTarget(target)) {
             void window.api.shell.openPath(targetPath)
           }
           break
@@ -156,7 +167,7 @@ export function useFileExplorerBrowseActions(
           const copied = getCopiedEntry()
           if (copied) {
             void readNamesInDir(actionDir).then((names) => {
-              runPlan(browsePastePlan(copied, actionDir, null, names))
+              runPlan(browsePastePlan(copied, actionDir, null, names, target))
             })
           }
           break
@@ -164,7 +175,7 @@ export function useFileExplorerBrowseActions(
         case 'duplicate': {
           if (row && entry) {
             void readNamesInDir(row.parentDir).then((names) => {
-              runPlan(browseDuplicatePlan(entry, row.parentDir, names))
+              runPlan(browseDuplicatePlan(entry, row.parentDir, names, target))
             })
           }
           break
@@ -181,7 +192,7 @@ export function useFileExplorerBrowseActions(
         }
         case 'delete': {
           if (row && entry) {
-            runPlan(browseDeletePlan(entry, row.parentDir))
+            runPlan(browseDeletePlan(entry, row.parentDir, target))
           }
           break
         }
@@ -206,7 +217,8 @@ export function useFileExplorerBrowseActions(
       revealEntry,
       runMutation,
       startInlineInput,
-      startRenameInput
+      startRenameInput,
+      target
     ]
   )
 
@@ -225,7 +237,7 @@ export function useFileExplorerBrowseActions(
         },
         onDelete: (entry) => {
           if (selectedRow) {
-            const plan = browseDeletePlan(entry, selectedRow.parentDir)
+            const plan = browseDeletePlan(entry, selectedRow.parentDir, target)
             void runMutation(plan.run, plan.authorizeDir)
           }
         },
@@ -246,7 +258,7 @@ export function useFileExplorerBrowseActions(
         onPaste: () => handleMenuAction('paste')
       })
     },
-    [handleMenuAction, inlineInput, openTarget, runMutation, selectedRow, startRenameInput]
+    [handleMenuAction, inlineInput, openTarget, runMutation, selectedRow, startRenameInput, target]
   )
 
   return {

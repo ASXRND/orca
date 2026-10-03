@@ -2,6 +2,7 @@ import type { RefObject } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { browseEntryNameError, browseNameStem } from './file-explorer-browse-mode'
 import { browseCreatePlan, browseRenamePlan } from './file-explorer-browse-operations'
+import { isRemoteBrowseTarget, useBrowseTarget } from './file-explorer-browse-target'
 import type { UseFileExplorerBrowseNavigationResult } from './use-file-explorer-browse-navigation'
 
 export type BrowseInlineInput =
@@ -35,6 +36,7 @@ export function useFileExplorerBrowseMutations(
   >
 ): UseFileExplorerBrowseMutationsResult {
   const { currentDir, readDir, setError, readNamesInDir } = nav
+  const target = useBrowseTarget()
   const [busy, setBusy] = useState(false)
   const [inlineInput, setInlineInputState] = useState<BrowseInlineInput | null>(null)
   const [inlineValue, setInlineValueState] = useState('')
@@ -77,7 +79,13 @@ export function useFileExplorerBrowseMutations(
       try {
         await action()
         await readDir(currentDir)
-      } catch {
+      } catch (error) {
+        if (isRemoteBrowseTarget(target)) {
+          // Why: allowed-roots are a local concept; an SSH target is its own
+          // boundary, so its refusal (stale connection, permissions) is final.
+          setError(error instanceof Error ? error.message : String(error))
+          return
+        }
         // Why: mutation targets may live outside allowed roots — authorize the
         // directory the action lands in, then retry once before surfacing it.
         try {
@@ -91,7 +99,7 @@ export function useFileExplorerBrowseMutations(
         setBusy(false)
       }
     },
-    [currentDir, readDir, setError]
+    [currentDir, readDir, setError, target]
   )
 
   const startInlineInput = useCallback(
@@ -135,11 +143,11 @@ export function useFileExplorerBrowseMutations(
       setInlineError(null)
       const plan =
         pending.kind === 'rename'
-          ? browseRenamePlan(pending.dirPath, pending.oldName, name)
-          : browseCreatePlan(pending.kind, pending.dirPath, name)
+          ? browseRenamePlan(pending.dirPath, pending.oldName, name, target)
+          : browseCreatePlan(pending.kind, pending.dirPath, name, target)
       void runMutation(plan.run, plan.authorizeDir)
     })()
-  }, [inlineValue, inlineInput, readNamesInDir, runMutation])
+  }, [inlineValue, inlineInput, readNamesInDir, runMutation, target])
 
   const cancelInline = useCallback(() => {
     setInlineInputState(null)
