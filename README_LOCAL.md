@@ -541,3 +541,83 @@ console.log(a.listPackage(f).filter(x=>/\/ru-[A-Za-z0-9_-]+\.js$/.test(x)))"
 
 Проверять нужно и установленную копию: `/Applications/Orca.app/Contents/Resources/app.asar`.
 
+## 6. Грабли: состояние профиля и «невидимое» окно (проверено 04.10.2026)
+
+### 6.1. Не править `profile-state.db` напрямую через `sqlite3`
+
+Симптом, если уже сломано — приложение при старте отказывается открывать профиль:
+
+```
+Orca cannot safely open the active profile because its SQLite state is unreadable.
+```
+
+Причина: таблица `profile_state_documents` хранит для каждого домена не только
+`payload`, но и `content_hash` (`sha256` от payload) и `revision`. Приложение проверяет
+их при чтении, поэтому `UPDATE ... SET payload=...` без пересчёта хеша ломает состояние
+целиком — профиль перестаёт открываться, а приложение завершиться штатно не даёт.
+
+Хеш считается функцией `hashProfileStatePayload` —
+`src/main/persistence/profile-state/profile-state-document-validation.ts:41`.
+
+**Правильный путь — штатный откат Orca** (экспорты и бэкапы приложение делает само):
+
+```bash
+pkill -9 -f 'Orca.app'
+orca profile state exports                     # посмотреть, что есть
+orca profile state rollback --backup <id>      # откатить на SQLite-бэкап
+# или откатить на JSON-экспорт:
+orca profile state rollback --revision <revision>
+sqlite3 "$HOME/Library/Application Support/Orca/profiles/local-default/profile-state.db" \
+  "PRAGMA integrity_check;"                    # должно быть ok
+```
+
+Если откат недоступен и править руками — только payload, хеш, ревизия и время вместе:
+
+```bash
+node -e "
+const {execFileSync}=require('child_process'), crypto=require('crypto');
+const db=process.env.HOME+'/Library/Application Support/Orca/profiles/local-default/profile-state.db';
+const q=(s)=>execFileSync('sqlite3',[db,s],{maxBuffer:1e8,encoding:'utf8'});
+const [payload,rev]=q(\"SELECT payload||'|'||revision FROM profile_state_documents WHERE domain='ui';\").trim().split('|');
+const obj=JSON.parse(payload); delete obj.windowBounds; delete obj.windowMaximized;
+const next=JSON.stringify(obj);
+const hash=crypto.createHash('sha256').update(next,'utf8').digest('hex');
+q(\"UPDATE profile_state_documents SET payload='\"+next.replace(/'/g,\"''\")+\"', content_hash='\"+hash+\"', revision=\"+(Number(rev)+1)+\", updated_at=\"+Date.now()+\" WHERE domain='ui';\");
+"
+```
+
+### 6.2. Окно уезжает за экран при нескольких мониторах
+
+Симптом: Orca висит в доке, процессы и демон работают, рендерер шлёт события,
+но окна на экране нет — кажется, что приложение «не запускается».
+
+Причина — сохранённые bounds окна. Проверить:
+
+```bash
+python3 -c "
+import Quartz
+wl=Quartz.CGWindowListCopyWindowInfo(Quartz.kCGWindowListOptionAll, Quartz.kCGNullWindowID)
+for w in wl:
+    if 'rca' in str(w.get('kCGWindowOwnerName','')):
+        b=w.get('kCGWindowBounds',{})
+        if b.get('Width',0)>700: print(b)"
+```
+
+И лежит в сторе ровно то же (домен `ui`):
+
+```bash
+sqlite3 "$HOME/Library/Application Support/Orca/profiles/local-default/profile-state.db" \
+  "SELECT payload FROM profile_state_documents WHERE domain='ui';" | grep -o '"windowBounds":{[^}]*}'
+```
+
+На этой машине три дисплея (встроенный 1512×982 + два 2048×1152), и сохранённые
+`{"x":1574,"y":-124}` уводили окно на второй монитор выше его верхнего края.
+
+**Лечение** — сбросить `windowBounds` (способ из 6.1), после чего приложение откроет
+окно в позиции по умолчанию.
+
+**Оговорка:** дефект позиционирования остаётся и после сброса — при старте приложение
+само сохраняет `y` отрицательным (`y=-138`). То есть с несколькими мониторами окно
+штатно открывается частично выше экрана. Если симптом повторится — снова сбрасывать
+bounds. Про автоматическое заполнение экрана в апстриме не сообщалось.
+
