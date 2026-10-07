@@ -17,7 +17,7 @@ import { cn } from '@/lib/utils'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getVisibleFileExplorerWorktreePath } from './file-explorer-reset'
 import { FileExplorerBackgroundMenu } from './FileExplorerBackgroundMenu'
-import { FileExplorerBrowseMode } from './FileExplorerBrowseMode'
+import { FileExplorerBrowseOverlay } from './FileExplorerBrowseOverlay'
 import { FileExplorerFilesTreePane } from './FileExplorerFilesTreePane'
 import { FileExplorerNameFilter } from './FileExplorerNameFilter'
 import { FileExplorerQueryStrip } from './FileExplorerQueryStrip'
@@ -49,7 +49,10 @@ function browseDefaultRoot(worktreePath: string | null): string {
 function FileExplorerFiles(): React.JSX.Element {
   // Why: component-level, not store-level — browse mode is a transient local
   // exploration state (like termix root), reset naturally when the panel unmounts.
+  // Why: component-level, not store-level — browse mode is a transient local
+  // exploration state (like termix root), reset naturally when the panel unmounts.
   const [browsePath, setBrowsePath] = useState<string | null>(null)
+  const [splitEnabled, setSplitEnabled] = useState(false)
   const explorerView = useAppStore((s) => s.rightSidebarExplorerView)
   const showRightSidebarFiles = useAppStore((s) => s.showRightSidebarFiles)
   const showRightSidebarSearch = useAppStore((s) => s.showRightSidebarSearch)
@@ -74,6 +77,7 @@ function FileExplorerFiles(): React.JSX.Element {
   const rootChoice = resolveExplorerDisplayRootChoice(rootOptions, savedRoot)
   const rootNavigation = useFileExplorerRootNavigation(activeWorktreeId, rootChoice, rootOptions)
   const worktreePath = activeWorktree?.path ?? null
+  const showSplit = splitEnabled && browsePath !== null
   const displayRootPath = getExplorerDisplayRootPath(worktreePath, rootChoice)
   const displayDepth = getExplorerDisplayDepth(worktreePath, displayRootPath)
   const isFilesViewActive = explorerView === 'files'
@@ -272,6 +276,9 @@ function FileExplorerFiles(): React.JSX.Element {
           onToggleBrowse={() =>
             setBrowsePath((current) => (current !== null ? null : browseDefaultRoot(worktreePath)))
           }
+          splitActive={showSplit}
+          canSplit={browsePath !== null}
+          onToggleSplit={() => setSplitEnabled((current) => !current)}
         />
         {activeWorktree?.isSparse && (
           <FileExplorerScopeNotice
@@ -336,17 +343,12 @@ function FileExplorerFiles(): React.JSX.Element {
            avoids remounting heavy virtualized panes while preserving full height. */}
         <div className="relative min-h-0 flex-1 overflow-hidden">
           {/* Browse mode overlays the worktree tree; exiting returns to the project listing. */}
-          {browsePath ? (
-            <div className="absolute inset-0 z-10 flex min-h-0 flex-col bg-background">
-              {/* Why: keyed by the root — switching folders restarts browse state
-                 instead of syncing it from a prop through an effect. */}
-              <FileExplorerBrowseMode
-                key={browsePath}
-                browsePath={browsePath}
-                onExit={() => setBrowsePath(null)}
-              />
-            </div>
-          ) : null}
+          <FileExplorerBrowseOverlay
+            browsePath={browsePath}
+            splitEnabled={splitEnabled}
+            onBrowsePathChange={setBrowsePath}
+            onSplitChange={setSplitEnabled}
+          />
           <FileExplorerFilesTreePane
             displayRootPath={displayRootPath}
             activeRepo={activeRepo}

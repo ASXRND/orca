@@ -1,5 +1,5 @@
 import React from 'react'
-import { Ellipsis, FolderOpen, ListCollapse, Loader2, RefreshCw } from 'lucide-react'
+import { Columns2, Ellipsis, FolderOpen, ListCollapse, Loader2, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -32,6 +32,9 @@ type FileExplorerToolbarProps = {
   onToggleDotfiles: () => void
   browseActive: boolean
   onToggleBrowse: () => void
+  splitActive: boolean
+  canSplit: boolean
+  onToggleSplit: () => void
 }
 
 /** Shares repository actions across explorer views. */
@@ -49,7 +52,10 @@ export function FileExplorerToolbar({
   showDotfiles,
   onToggleDotfiles,
   browseActive,
-  onToggleBrowse
+  onToggleBrowse,
+  splitActive,
+  canSplit,
+  onToggleSplit
 }: FileExplorerToolbarProps): React.JSX.Element {
   return (
     <div className="flex h-8 min-h-8 items-center gap-2 border-b border-border px-2">
@@ -80,6 +86,40 @@ export function FileExplorerToolbar({
           {translate(
             'auto.components.right.sidebar.FileExplorerToolbar.9a1f2c33bd',
             'Browse any folder'
+          )}
+        </TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant={splitActive ? 'secondary' : 'ghost'}
+            size="icon-xs"
+            className={cn(
+              'text-muted-foreground hover:text-foreground',
+              !canSplit && 'cursor-not-allowed opacity-50'
+            )}
+            aria-label={translate(
+              'auto.components.right.sidebar.FileExplorerToolbar.splitBrowse',
+              'Split browse into two panes'
+            )}
+            aria-pressed={splitActive}
+            aria-disabled={!canSplit}
+            onClick={(event) => {
+              if (!canSplit) {
+                event.preventDefault()
+                return
+              }
+              onToggleSplit()
+            }}
+          >
+            <Columns2 className="size-3" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" sideOffset={4}>
+          {translate(
+            'auto.components.right.sidebar.FileExplorerToolbar.splitBrowse',
+            'Split browse into two panes'
           )}
         </TooltipContent>
       </Tooltip>

@@ -174,6 +174,9 @@ function makeToolbar(overrides: Partial<Parameters<typeof FileExplorerToolbar>[0
     onToggleDotfiles: vi.fn(),
     browseActive: false,
     onToggleBrowse: vi.fn(),
+    splitActive: false,
+    canSplit: false,
+    onToggleSplit: vi.fn(),
     ...overrides
   })
 }
@@ -312,6 +315,7 @@ describe('FileExplorerToolbar', () => {
 
     expect(getToolbarButtonLabels(element)).toEqual([
       'Browse any folder',
+      'Split browse into two panes',
       'Collapse All',
       'Refresh Explorer',
       'More Explorer Actions'

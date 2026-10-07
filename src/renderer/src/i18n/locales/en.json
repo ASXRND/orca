@@ -12412,7 +12412,13 @@
             "6026b16950": "Collapse All",
             "693cbeadd0": "Search",
             "c1f3f3ec70": "Search file contents",
-            "9a1f2c33bd": "Browse any folder"
+            "9a1f2c33bd": "Browse any folder",
+            "splitBrowse": "Split browse into two panes"
+          },
+          "FileExplorerSplitLayout": {
+            "idlePaused": "Paused after a minute of inactivity — click to resume",
+            "resizeDivider": "Resize explorer panes",
+            "toggleOrientation": "Toggle split orientation"
           },
           "FileExplorerTreeStatus": {
             "ce03835e1f": "No files in this workspace",

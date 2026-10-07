@@ -108,6 +108,14 @@
             "revealInFileExplorer": "Показать в проводнике",
             "revealInFinder": "Показать в Finder"
           },
+          "FileExplorerSplitLayout": {
+            "idlePaused": "Приостановлено после минуты бездействия — нажмите, чтобы возобновить",
+            "resizeDivider": "Изменить размер панелей обозревателя",
+            "toggleOrientation": "Переключить ориентацию сплита"
+          },
+          "FileExplorerToolbar": {
+            "splitBrowse": "Разделить обзор на две панели"
+          },
           "GitHistoryPanel": {
             "111e1d0db4": "ошибка",
             "62e685d5ec": "простой",
