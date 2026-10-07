@@ -40,13 +40,21 @@ export function FileExplorerSplitLayout({
 }: FileExplorerSplitLayoutProps): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const isColumns = orientation === 'columns'
+  // Why: without an explicit main-axis size both panes stay flex-1 — the
+  // divider drag updates state but nothing visibly resizes.
+  const primarySize = `${clampFileExplorerSplitRatio(ratio) * 100}%`
 
   return (
     <div
       ref={containerRef}
       className={cn('relative flex min-h-0 flex-1', isColumns ? 'flex-row' : 'flex-col')}
     >
-      <FileExplorerSplitPane browsePath={primaryBrowsePath} onExit={onPrimaryExit} />
+      <FileExplorerSplitPane
+        browsePath={primaryBrowsePath}
+        onExit={onPrimaryExit}
+        className="shrink-0 grow-0"
+        style={isColumns ? { width: primarySize } : { height: primarySize }}
+      />
       <FileExplorerSplitDivider
         orientation={orientation}
         ratio={ratio}

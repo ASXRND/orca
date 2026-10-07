@@ -1,4 +1,5 @@
 import type { KeyboardEvent as ReactKeyboardEvent, RefObject } from 'react'
+import React from 'react'
 import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
@@ -6,6 +7,13 @@ import { useActiveWorktree } from '@/store/selectors'
 import { isRemoteBrowseTarget, useBrowseTarget } from './file-explorer-browse-target'
 import type { BrowseEntry, BrowseRow } from './file-explorer-browse-mode'
 import { openBrowseFileInEditor } from './file-explorer-browse-open'
+import {
+  useFileExplorerBrowseDnd,
+  type BrowseListDragProps,
+  type BrowseRowDragProps
+} from './use-file-explorer-browse-dnd'
+import { useFileExplorerBrowseAppMenuClipboard } from './use-file-explorer-browse-app-menu-clipboard'
+import { emitBrowseFsMutation } from './file-explorer-browse-fs-events'
 import {
   browseDeletePlan,
   browseDuplicatePlan,
@@ -42,6 +50,11 @@ export type UseFileExplorerBrowseActionsResult = {
   cancelInline: () => void
   handleMenuAction: (action: BrowseMenuAction) => void
   handleListKeyDown: (event: ReactKeyboardEvent<HTMLDivElement>) => void
+  listRef: RefObject<HTMLDivElement | null>
+  browseListId: string
+  dropTargetDir: string | null
+  listDragProps: BrowseListDragProps
+  rowDragProps: (row: BrowseRow) => BrowseRowDragProps
 }
 
 /**
@@ -226,6 +239,17 @@ export function useFileExplorerBrowseActions(
 
   const selectedRow = selectedPath ? (rows.find((row) => row.path === selectedPath) ?? null) : null
 
+  const listRef = React.useRef<HTMLDivElement | null>(null)
+  const dnd = useFileExplorerBrowseDnd({
+    instanceId: nav.instanceId,
+    currentDir,
+    inlineActive: inlineInput !== null,
+    target,
+    readNamesInDir,
+    runMutation: mutations.runMutation,
+    notifyMutation: (dirs, origin) => emitBrowseFsMutation(origin, dirs)
+  })
+
   /** F2 / ⌫ / ⏎ / ⌘C / ⌘V on the highlighted row (see file-explorer-browse-keyboard). */
   const handleListKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLDivElement>) => {
@@ -263,6 +287,13 @@ export function useFileExplorerBrowseActions(
     [handleMenuAction, inlineInput, openTarget, runMutation, selectedRow, startRenameInput, target]
   )
 
+  useFileExplorerBrowseAppMenuClipboard({
+    listId: nav.instanceId,
+    listRef,
+    selectedRow,
+    onPaste: () => handleMenuAction('paste')
+  })
+
   return {
     busy,
     menu,
@@ -280,6 +311,11 @@ export function useFileExplorerBrowseActions(
     submitInline,
     cancelInline,
     handleMenuAction,
-    handleListKeyDown
+    handleListKeyDown,
+    listRef,
+    browseListId: nav.instanceId,
+    dropTargetDir: dnd.dropTargetDir,
+    listDragProps: dnd.listDragProps,
+    rowDragProps: dnd.rowDragProps
   }
 }

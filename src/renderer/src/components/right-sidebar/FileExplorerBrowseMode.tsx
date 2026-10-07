@@ -9,8 +9,6 @@ import {
   Loader2,
   RefreshCw
 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { basename } from '@/lib/path'
 import { translate } from '@/i18n/i18n'
@@ -19,6 +17,7 @@ import { FileExplorerBrowsePathSuggestions } from './FileExplorerBrowsePathSugge
 import { useFileExplorerBrowseNavigation } from './use-file-explorer-browse-navigation'
 import { useFileExplorerBrowseActions } from './use-file-explorer-browse'
 import { useFileExplorerBrowsePathComplete } from './use-file-explorer-browse-path-complete'
+import { FileExplorerBrowseTooltipButton } from './FileExplorerBrowseTooltipButton'
 
 type FileExplorerBrowseModeProps = {
   /** Active browse root — a directory outside the worktree. */
@@ -69,7 +68,11 @@ export function FileExplorerBrowseMode({
     submitInline,
     cancelInline,
     handleMenuAction,
-    handleListKeyDown
+    handleListKeyDown,
+    listRef,
+    dropTargetDir,
+    listDragProps,
+    rowDragProps
   } = actions
   const complete = useFileExplorerBrowsePathComplete(nav, openFileAtPath)
 
@@ -140,7 +143,7 @@ export function FileExplorerBrowseMode({
               />
             ) : null}
           </div>
-          <TooltipButton
+          <FileExplorerBrowseTooltipButton
             label={translate(
               'auto.components.right.sidebar.FileExplorerBrowseMode.newFile',
               'New File'
@@ -148,8 +151,8 @@ export function FileExplorerBrowseMode({
             onClick={() => startInlineInput('newFile', currentDir)}
           >
             <FilePlus className="size-3" />
-          </TooltipButton>
-          <TooltipButton
+          </FileExplorerBrowseTooltipButton>
+          <FileExplorerBrowseTooltipButton
             label={translate(
               'auto.components.right.sidebar.FileExplorerBrowseMode.newFolder',
               'New Folder'
@@ -157,8 +160,8 @@ export function FileExplorerBrowseMode({
             onClick={() => startInlineInput('newFolder', currentDir)}
           >
             <FolderPlus className="size-3" />
-          </TooltipButton>
-          <TooltipButton
+          </FileExplorerBrowseTooltipButton>
+          <FileExplorerBrowseTooltipButton
             label={translate(
               'auto.components.right.sidebar.FileExplorerBrowseMode.refresh',
               'Refresh'
@@ -170,8 +173,8 @@ export function FileExplorerBrowseMode({
             ) : (
               <RefreshCw className="size-3" />
             )}
-          </TooltipButton>
-          <TooltipButton
+          </FileExplorerBrowseTooltipButton>
+          <FileExplorerBrowseTooltipButton
             label={translate(
               'auto.components.right.sidebar.FileExplorerBrowseMode.reveal',
               'Reveal in Finder'
@@ -179,8 +182,8 @@ export function FileExplorerBrowseMode({
             onClick={() => revealEntry(currentDir)}
           >
             <FolderOpen className="size-3" />
-          </TooltipButton>
-          <TooltipButton
+          </FileExplorerBrowseTooltipButton>
+          <FileExplorerBrowseTooltipButton
             label={translate(
               'auto.components.right.sidebar.FileExplorerBrowseMode.goUp',
               'Up one level'
@@ -188,8 +191,8 @@ export function FileExplorerBrowseMode({
             onClick={goUp}
           >
             <ChevronRight className="size-3 rotate-90" />
-          </TooltipButton>
-          <TooltipButton
+          </FileExplorerBrowseTooltipButton>
+          <FileExplorerBrowseTooltipButton
             label={translate(
               'auto.components.right.sidebar.FileExplorerBrowseMode.backToProject',
               'Back to project'
@@ -197,7 +200,7 @@ export function FileExplorerBrowseMode({
             onClick={onExit}
           >
             <span className="text-[11px]">⌂</span>
-          </TooltipButton>
+          </FileExplorerBrowseTooltipButton>
         </div>
         {error ? (
           <div className="flex flex-col gap-0.5 text-[11px] text-destructive">
@@ -229,9 +232,11 @@ export function FileExplorerBrowseMode({
         ) : null}
       </div>
       <div
+        ref={listRef}
         tabIndex={0}
         className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto py-1 outline-none"
         onKeyDown={handleListKeyDown}
+        {...listDragProps}
         onContextMenu={(event) => {
           // Empty area: the menu targets the open directory (new file/folder, paste, refresh).
           event.preventDefault()
@@ -250,10 +255,12 @@ export function FileExplorerBrowseMode({
                 <button
                   type="button"
                   aria-expanded={row.entry.isDirectory ? row.isExpanded : undefined}
+                  {...rowDragProps(row)}
                   className={cn(
                     'flex w-full items-center gap-1.5 py-1 pr-2 text-left text-xs text-foreground',
                     'hover:bg-accent hover:text-accent-foreground',
-                    selectedPath === row.path && 'bg-accent text-accent-foreground'
+                    selectedPath === row.path && 'bg-accent text-accent-foreground',
+                    dropTargetDir === row.path && 'bg-accent ring-1 ring-inset ring-ring'
                   )}
                   style={{ paddingLeft: `${row.depth * 16 + 8}px` }}
                   onClick={() => {
@@ -383,36 +390,5 @@ export function FileExplorerBrowseMode({
         />
       ) : null}
     </div>
-  )
-}
-
-/** Ghost icon button with a tooltip — the toolbar icons of the path bar. */
-function TooltipButton({
-  label,
-  onClick,
-  children
-}: {
-  label: string
-  onClick: () => void
-  children: React.ReactNode
-}): React.JSX.Element {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          className="text-muted-foreground hover:text-foreground"
-          aria-label={label}
-          onClick={onClick}
-        >
-          {children}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent side="bottom" sideOffset={4}>
-        {label}
-      </TooltipContent>
-    </Tooltip>
   )
 }

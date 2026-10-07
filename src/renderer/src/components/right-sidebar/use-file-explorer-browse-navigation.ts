@@ -11,6 +11,8 @@ import {
 } from './file-explorer-browse-mode'
 import { readBrowseDirEntries } from './file-explorer-browse-fs'
 import { useBrowseTarget } from './file-explorer-browse-target'
+import { useFileExplorerBrowseInstance } from './use-file-explorer-browse-instance'
+import { browseDirNeedsRefresh, subscribeBrowseFsMutation } from './file-explorer-browse-fs-events'
 
 /** Inline tree of browse mode: expanded folder paths and their cached listings. */
 type BrowseTreeState = {
@@ -21,6 +23,7 @@ type BrowseTreeState = {
 const EMPTY_TREE: BrowseTreeState = { expandedPaths: new Set(), childrenByPath: {} }
 
 export type UseFileExplorerBrowseNavigationResult = {
+  instanceId: string
   pathInput: string
   setPathInput: Dispatch<SetStateAction<string>>
   currentDir: string
@@ -124,6 +127,21 @@ export function useFileExplorerBrowseNavigation(
     void readDir(browsePath)
   }, [browsePath, readDir])
 
+  const instanceId = useFileExplorerBrowseInstance()
+
+  useEffect(
+    () =>
+      subscribeBrowseFsMutation((origin, changedDirs) => {
+        if (origin === instanceId) {
+          return
+        }
+        if (browseDirNeedsRefresh(currentDirRef.current, changedDirs)) {
+          void readDir(currentDirRef.current)
+        }
+      }),
+    [instanceId, readDir]
+  )
+
   const toggleExpand = useCallback(
     (path: string) => {
       const { expandedPaths, childrenByPath } = treeStateRef.current
@@ -198,6 +216,7 @@ export function useFileExplorerBrowseNavigation(
   }, [currentDir, readDir])
 
   return {
+    instanceId,
     pathInput,
     setPathInput,
     currentDir,

@@ -12,16 +12,28 @@ import { useFileExplorerIdleRender } from './use-file-explorer-idle-render'
 type FileExplorerSplitPaneProps = {
   browsePath: string
   onExit: () => void
+  /** Layout sizing along the split axis; secondary pane fills the rest. */
+  className?: string
+  style?: React.CSSProperties
 }
 
 /**
  * One side of the split. Content unmounts after a minute of inactivity —
  * browsePath stays in the parent, so the chain restores on next activity.
  */
-export function FileExplorerSplitPane({ browsePath, onExit }: FileExplorerSplitPaneProps) {
+export function FileExplorerSplitPane({
+  browsePath,
+  onExit,
+  className,
+  style
+}: FileExplorerSplitPaneProps) {
   const { rendering, containerHandlers } = useFileExplorerIdleRender()
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col" {...containerHandlers}>
+    <div
+      className={cn('flex min-h-0 min-w-0 flex-col', className ?? 'flex-1')}
+      style={style}
+      {...containerHandlers}
+    >
       {rendering ? (
         <FileExplorerBrowseMode key={browsePath} browsePath={browsePath} onExit={onExit} />
       ) : (
