@@ -72,7 +72,7 @@ it('bounds warming to the required platforms and validates changes without grant
   expect(workflow.permissions).toEqual({ contents: 'read' })
   expect(workflow.on.push.branches).toEqual(['main'])
   expect(workflow.on.push.paths).toContain('.github/actions/prepare-native-runtime/**')
-  expect(workflow.on.schedule).toEqual([{ cron: '41 * * * *' }])
+  expect(workflow.on.schedule).toBeUndefined()
   expect(workflow.on.pull_request.paths).toContain('.github/workflows/ci-cache-warmup.yml')
   expect(steps[0].with['persist-credentials']).toBe(false)
 })
@@ -97,6 +97,9 @@ it('warms and probes both Windows images with the persistence job runtime', () =
   const install = job.steps.find(
     (step) => step.uses === './.github/actions/install-node-dependencies'
   )
-  expect(install.with).toEqual({ 'native-runtime': 'node' })
+  expect(install.with).toEqual({
+    'native-runtime': 'node',
+    'cache-pnpm-store-lookup-only': 'true'
+  })
   expect(job.steps.at(-1).run).toBe('node config/scripts/ensure-native-runtime.mjs --check-only')
 })
