@@ -119,6 +119,11 @@ def sorted_tree(d):
 
 
 def main():
+    # Optional external map: python3 apply-ru.py path/to/map.json
+    for arg in sys.argv[1:]:
+        if not arg.startswith("--"):
+            with open(arg, encoding="utf-8") as _mf:
+                TRANSLATIONS.update(json.load(_mf))
     dry = "--dry-run" in sys.argv
     with open(EN, encoding="utf-8") as f:
         en = json.load(f)
