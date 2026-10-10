@@ -23,10 +23,7 @@ export function browsePastePlan(
   fsTarget: BrowseTarget = {}
 ): BrowseMutationPlan {
   const actionDir = browseActionDir(currentDir, target)
-  const destinationPath = browseChildPath(
-    actionDir,
-    browseUniqueName(copied.name, existingNames)
-  )
+  const destinationPath = browseChildPath(actionDir, browseUniqueName(copied.name, existingNames))
   return {
     run: async () => {
       await window.api.fs.copy({
