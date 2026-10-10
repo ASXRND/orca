@@ -1,7 +1,6 @@
 import type { KeyboardEvent as ReactKeyboardEvent, RefObject } from 'react'
 import React from 'react'
 import { useCallback, useState } from 'react'
-import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { useActiveWorktree } from '@/store/selectors'
 import { isRemoteBrowseTarget, useBrowseTarget } from './file-explorer-browse-target'
@@ -102,9 +101,7 @@ export function useFileExplorerBrowseActions(
         worktreePath,
         connectionId: target.connectionId,
         deps: {
-          authorizeExternalPath: window.api.fs.authorizeExternalPath,
-          openFile,
-          onError: (message) => toast.error(message)
+          openFile
         }
       })
     },
@@ -143,7 +140,7 @@ export function useFileExplorerBrowseActions(
       // Termix: a highlighted folder is the action target, otherwise its parent.
       const actionDir = row ? (row.entry.isDirectory ? row.path : row.parentDir) : currentDir
       const runPlan = (plan: BrowseMutationPlan): void => {
-        void runMutation(plan.run, plan.authorizeDir)
+        void runMutation(plan.run)
       }
       switch (action) {
         case 'open': {
@@ -264,7 +261,7 @@ export function useFileExplorerBrowseActions(
         onDelete: (entry) => {
           if (selectedRow) {
             const plan = browseDeletePlan(entry, selectedRow.parentDir, target)
-            void runMutation(plan.run, plan.authorizeDir)
+            void runMutation(plan.run)
           }
         },
         onOpen: (entry) => {

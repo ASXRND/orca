@@ -1,9 +1,7 @@
 import { detectLanguage } from '@/lib/language-detect'
 import { toWorktreeRelativePath } from '@/lib/terminal-links'
-import { translate } from '@/i18n/i18n'
 
 export type BrowseFileOpenDeps = {
-  authorizeExternalPath: (args: { targetPath: string }) => Promise<void>
   openFile: (
     params: {
       filePath: string
@@ -19,13 +17,12 @@ export type BrowseFileOpenDeps = {
       focusEditor?: boolean
     }
   ) => void
-  onError: (message: string) => void
 }
 
 /**
  * Opens a browsed file as an editor tab (termix local-file tab parity). Browse
  * targets can live outside the worktree, so the user's click is the trust
- * gesture: the external read is authorized before the tab exists, matching the
+ * gesture: the external read resolves in place, matching the
  * AI-vault log open contract.
  */
 export async function openBrowseFileInEditor(args: {
@@ -37,22 +34,7 @@ export async function openBrowseFileInEditor(args: {
   connectionId?: string
   deps: BrowseFileOpenDeps
 }): Promise<void> {
-  const { filePath, worktreeId, worktreePath, connectionId, deps } = args
-  // Why: allowed-roots govern local reads only — on an SSH target the connection
-  // is already the boundary, so there is nothing to authorize before the tab.
-  if (!connectionId) {
-    try {
-      await deps.authorizeExternalPath({ targetPath: filePath })
-    } catch {
-      deps.onError(
-        translate(
-          'auto.components.right.sidebar.fileExplorerBrowseOpen.notAuthorized',
-          "Couldn't open file — path not authorized."
-        )
-      )
-      return
-    }
-  }
+  const { filePath, worktreeId, worktreePath, deps } = args
   deps.openFile(
     {
       filePath,

@@ -47,8 +47,8 @@ export type UseFileExplorerBrowseNavigationResult = {
 /**
  * Path-bar and listing state of browse mode: manual navigation to any absolute
  * directory, the entries of the open directory, and the failure text. Reads
- * that are refused go through the shared fs:authorizeExternalPath retry, so
- * browsing never widens the allowed-roots model on its own. Folder rows expand
+ * outside allowed roots are refused by the main process, so browsing never
+ * widens the allowed-roots model on its own. Folder rows expand
  * inline (termix tree): children load lazily and are re-read together with the
  * open directory after every mutation.
  */

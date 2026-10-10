@@ -69,7 +69,7 @@ export function useFileExplorerBrowseDnd({
         const names = new Set(await readNamesInDir(destDir))
         for (const sourcePath of accepted) {
           const plan = browseMovePlan(sourcePath, destDir, names, target)
-          await runMutation(plan.run, plan.authorizeDir)
+          await runMutation(plan.run)
           names.add(basename(plan.destinationPath))
         }
         notify?.([destDir, ...accepted.map((path) => dirname(path))], instanceId)

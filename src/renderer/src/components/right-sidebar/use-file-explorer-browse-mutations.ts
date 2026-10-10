@@ -20,14 +20,13 @@ export type UseFileExplorerBrowseMutationsResult = {
   startRenameInput: (dirPath: string, oldName: string) => void
   submitInline: () => void
   cancelInline: () => void
-  runMutation: (action: () => Promise<void>, authorizeDir?: string) => Promise<void>
+  runMutation: (action: () => Promise<void>) => Promise<void>
 }
 
 /**
- * Write path of browse mode: the authorize-retry mutation runner plus the
- * inline rename/create input. Every mutation that fails is retried once after
- * fs:authorizeExternalPath on the directory it lands in, so browsing never
- * widens the allowed-roots model on its own.
+ * Write path of browse mode: the mutation runner plus the
+ * inline rename/create input. Every mutation that fails surfaces the main
+ * process verdict; browsing never widens the allowed-roots model on its own.
  */
 export function useFileExplorerBrowseMutations(
   nav: Pick<
@@ -74,7 +73,7 @@ export function useFileExplorerBrowseMutations(
   }, [inlineInput])
 
   const runMutation = useCallback(
-    async (action: () => Promise<void>, authorizeDir?: string): Promise<void> => {
+    async (action: () => Promise<void>): Promise<void> => {
       setBusy(true)
       try {
         await action()
@@ -89,7 +88,6 @@ export function useFileExplorerBrowseMutations(
         // Why: mutation targets may live outside allowed roots — authorize the
         // directory the action lands in, then retry once before surfacing it.
         try {
-          await window.api.fs.authorizeExternalPath({ targetPath: authorizeDir ?? currentDir })
           await action()
           await readDir(currentDir)
         } catch (retryError) {
@@ -145,7 +143,7 @@ export function useFileExplorerBrowseMutations(
         pending.kind === 'rename'
           ? browseRenamePlan(pending.dirPath, pending.oldName, name, target)
           : browseCreatePlan(pending.kind, pending.dirPath, name, target)
-      void runMutation(plan.run, plan.authorizeDir)
+      void runMutation(plan.run)
     })()
   }, [inlineValue, inlineInput, readNamesInDir, runMutation, target])
 

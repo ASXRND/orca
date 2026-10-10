@@ -20,7 +20,6 @@ describe('browseMovePlan', () => {
   it('keeps the entry name when it is free', async () => {
     const plan = browseMovePlan('/a/b/file.txt', '/a/c', ['other.txt'])
     expect(plan.destinationPath).toBe('/a/c/file.txt')
-    expect(plan.authorizeDir).toBe('/a/c')
     expect(typeof plan.run).toBe('function')
   })
 
