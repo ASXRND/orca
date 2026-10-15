@@ -44,6 +44,8 @@ export function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
         relativePath: file.relativePath
       })
     },
+    // Why: web client reads through the runtime catalog — nothing to grant.
+    authorizeExternalPath: () => Promise.resolve(),
     readFile: async ({ filePath }) => {
       const file = await resolveRuntimeFilePath(filePath)
       return callRuntimeResult('files.readPreview', {

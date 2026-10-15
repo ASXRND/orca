@@ -140,7 +140,7 @@ export function useFileExplorerBrowseActions(
       // Termix: a highlighted folder is the action target, otherwise its parent.
       const actionDir = row ? (row.entry.isDirectory ? row.path : row.parentDir) : currentDir
       const runPlan = (plan: BrowseMutationPlan): void => {
-        void runMutation(plan.run)
+        void runMutation(plan.run, plan.authorizeDir)
       }
       switch (action) {
         case 'open': {
@@ -261,7 +261,7 @@ export function useFileExplorerBrowseActions(
         onDelete: (entry) => {
           if (selectedRow) {
             const plan = browseDeletePlan(entry, selectedRow.parentDir, target)
-            void runMutation(plan.run)
+            void runMutation(plan.run, plan.authorizeDir)
           }
         },
         onOpen: (entry) => {

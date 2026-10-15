@@ -5,6 +5,7 @@ import { assertSshMutationExpectation } from '../../ssh/ssh-connection-generatio
 import { requireSshFilesystemProvider } from '../../providers/ssh-filesystem-dispatch'
 import { tryDeleteWslUncPath } from '../../wsl-unc-delete'
 import type { LocalFileAccess } from '../../../shared/local-file-access'
+import { authorizeExternalPath } from '../filesystem-auth'
 import {
   resolveDesktopAuthorizedPath,
   resolveLocalWriteRequestPath
@@ -101,4 +102,8 @@ export function registerFilesystemWriteHandlers(context: FilesystemHandlerContex
 
   registerFilesystemMutationHandlers(store)
   registerAgentSessionAttachmentUploadHandlers()
+
+  ipcMain.handle('fs:authorizeExternalPath', (_event, args: { targetPath: string }): void => {
+    authorizeExternalPath(args.targetPath)
+  })
 }

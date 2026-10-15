@@ -61,6 +61,7 @@ export type FilesystemApi = {
       connectionId?: string
       followSymlinks?: boolean
     }) => Promise<DirEntry[]>
+    authorizeExternalPath: (args: { targetPath: string }) => Promise<void>
     readFile: (args: {
       filePath: string
       connectionId?: string

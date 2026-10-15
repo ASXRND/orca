@@ -9,8 +9,9 @@ import { basename, dirname } from '@/lib/path'
 import type { CopiedEntry } from './file-explorer-browse-clipboard'
 import { browseMutationArgs, type BrowseTarget } from './file-explorer-browse-target'
 
-/** A filesystem mutation run. */
+/** A filesystem mutation, plus the directory whose authorization it may need. */
 export type BrowseMutationPlan = {
+  authorizeDir: string
   run: () => Promise<void>
 }
 
@@ -25,6 +26,7 @@ export function browsePastePlan(
   const actionDir = browseActionDir(currentDir, target)
   const destinationPath = browseChildPath(actionDir, browseUniqueName(copied.name, existingNames))
   return {
+    authorizeDir: actionDir,
     run: async () => {
       await window.api.fs.copy({
         sourcePath: copied.absPath,
@@ -48,6 +50,7 @@ export function browseDuplicatePlan(
     browseUniqueName(browseDuplicateName(entry.name), existingNames)
   )
   return {
+    authorizeDir: currentDir,
     run: async () => {
       await window.api.fs.copy({
         sourcePath,
@@ -67,6 +70,7 @@ export function browseCreatePlan(
 ): BrowseMutationPlan {
   const targetPath = browseChildPath(dirPath, name)
   return {
+    authorizeDir: dirPath,
     run: async () => {
       if (kind === 'newFolder') {
         await window.api.fs.createDir({ dirPath: targetPath, ...browseMutationArgs(fsTarget) })
@@ -84,6 +88,7 @@ export function browseRenamePlan(
   fsTarget: BrowseTarget = {}
 ): BrowseMutationPlan {
   return {
+    authorizeDir: dirPath,
     run: async () => {
       await window.api.fs.rename({
         oldPath: browseChildPath(dirPath, oldName),
@@ -120,6 +125,7 @@ export function browseMovePlan(
     browseUniqueName(basename(sourcePath), existingNames)
   )
   return {
+    authorizeDir: destDir,
     destinationPath,
     run: async () => {
       await window.api.fs.rename({
@@ -139,6 +145,7 @@ export function browseDeletePlan(
 ): BrowseMutationPlan {
   const targetPath = browseChildPath(currentDir, entry.name)
   return {
+    authorizeDir: currentDir,
     run: async () => {
       await window.api.fs.deletePath({
         targetPath,

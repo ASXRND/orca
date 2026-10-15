@@ -85,11 +85,13 @@ describe('registerFilesystemHandlers', () => {
     invalidateAuthorizedRootsCache()
   })
 
-  it('registers no channel that remembers a path grant', () => {
+  // Fork deviation from upstream: browse mode keeps the path-grant channel so
+  // any folder stays browsable; see README_LOCAL (authorizeExternalPath).
+  it('registers the browse path-grant channel alongside file reads', () => {
     registerFilesystemHandlers(store as never)
 
     expect(handlers.has('fs:readFile')).toBe(true)
-    expect(handlers.has('fs:authorizeExternalPath')).toBe(false)
+    expect(handlers.has('fs:authorizeExternalPath')).toBe(true)
   })
 
   it('re-sorts SSH provider listings directories-first in natural order', async () => {

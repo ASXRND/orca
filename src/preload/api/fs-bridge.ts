@@ -43,6 +43,8 @@ export const fsApi = {
     followSymlinks?: boolean
   }): Promise<{ name: string; isDirectory: boolean; isSymlink: boolean }[]> =>
     ipcRenderer.invoke('fs:readDir', args),
+  authorizeExternalPath: (args: { targetPath: string }): Promise<void> =>
+    ipcRenderer.invoke('fs:authorizeExternalPath', args),
   readFile: (args: {
     filePath: string
     connectionId?: string

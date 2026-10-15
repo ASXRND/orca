@@ -20,7 +20,7 @@ export type UseFileExplorerBrowseMutationsResult = {
   startRenameInput: (dirPath: string, oldName: string) => void
   submitInline: () => void
   cancelInline: () => void
-  runMutation: (action: () => Promise<void>) => Promise<void>
+  runMutation: (action: () => Promise<void>, authorizeDir?: string) => Promise<void>
 }
 
 /**
@@ -73,7 +73,7 @@ export function useFileExplorerBrowseMutations(
   }, [inlineInput])
 
   const runMutation = useCallback(
-    async (action: () => Promise<void>): Promise<void> => {
+    async (action: () => Promise<void>, authorizeDir?: string): Promise<void> => {
       setBusy(true)
       try {
         await action()
@@ -88,6 +88,7 @@ export function useFileExplorerBrowseMutations(
         // Why: mutation targets may live outside allowed roots — authorize the
         // directory the action lands in, then retry once before surfacing it.
         try {
+          await window.api.fs.authorizeExternalPath({ targetPath: authorizeDir ?? currentDir })
           await action()
           await readDir(currentDir)
         } catch (retryError) {
@@ -143,7 +144,7 @@ export function useFileExplorerBrowseMutations(
         pending.kind === 'rename'
           ? browseRenamePlan(pending.dirPath, pending.oldName, name, target)
           : browseCreatePlan(pending.kind, pending.dirPath, name, target)
-      void runMutation(plan.run)
+      void runMutation(plan.run, plan.authorizeDir)
     })()
   }, [inlineValue, inlineInput, readNamesInDir, runMutation, target])
 
