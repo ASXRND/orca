@@ -12834,7 +12834,6 @@
             "splitBrowse": "Split browse into two panes"
           },
           "FileExplorerSplitLayout": {
-            "idlePaused": "Paused after a minute of inactivity — click to resume",
             "resizeDivider": "Resize explorer panes",
             "toggleOrientation": "Toggle split orientation"
           },

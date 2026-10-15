@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   clampFileExplorerSplitRatio,
   FILE_EXPLORER_SPLIT_DEFAULT_RATIO,
-  FILE_EXPLORER_SPLIT_IDLE_MS,
   FILE_EXPLORER_SPLIT_MAX_RATIO,
   FILE_EXPLORER_SPLIT_MIN_RATIO,
   fileExplorerSplitPrimarySize,
@@ -42,11 +41,5 @@ describe('toggleFileExplorerSplitOrientation', () => {
   it('toggles columns <-> rows', () => {
     expect(toggleFileExplorerSplitOrientation('columns')).toBe('rows')
     expect(toggleFileExplorerSplitOrientation('rows')).toBe('columns')
-  })
-})
-
-describe('FILE_EXPLORER_SPLIT_IDLE_MS', () => {
-  it('idles a pane after one minute', () => {
-    expect(FILE_EXPLORER_SPLIT_IDLE_MS).toBe(60_000)
   })
 })

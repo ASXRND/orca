@@ -7,7 +7,6 @@ import {
   type FileExplorerSplitOrientation,
   type FileExplorerSplitRatio
 } from './file-explorer-split-state'
-import { useFileExplorerIdleRender } from './use-file-explorer-idle-render'
 
 type FileExplorerSplitPaneProps = {
   browsePath: string
@@ -18,8 +17,9 @@ type FileExplorerSplitPaneProps = {
 }
 
 /**
- * One side of the split. Content unmounts after a minute of inactivity —
- * browsePath stays in the parent, so the chain restores on next activity.
+ * One side of the split. Both panes always stay mounted — an idle pane costs
+ * almost nothing (no polling/watchers, reads are on demand only), while
+ * unmounting dropped expanded folders, selection and path input.
  */
 export function FileExplorerSplitPane({
   browsePath,
@@ -27,23 +27,9 @@ export function FileExplorerSplitPane({
   className,
   style
 }: FileExplorerSplitPaneProps) {
-  const { rendering, containerHandlers } = useFileExplorerIdleRender()
   return (
-    <div
-      className={cn('flex min-h-0 min-w-0 flex-col', className ?? 'flex-1')}
-      style={style}
-      {...containerHandlers}
-    >
-      {rendering ? (
-        <FileExplorerBrowseMode key={browsePath} browsePath={browsePath} onExit={onExit} />
-      ) : (
-        <div className="flex min-h-0 flex-1 items-center justify-center px-2 text-center text-[11px] text-muted-foreground">
-          {translate(
-            'auto.components.right.sidebar.FileExplorerSplitLayout.idlePaused',
-            'Paused after a minute of inactivity — click to resume'
-          )}
-        </div>
-      )}
+    <div className={cn('flex min-h-0 min-w-0 flex-col', className ?? 'flex-1')} style={style}>
+      <FileExplorerBrowseMode key={browsePath} browsePath={browsePath} onExit={onExit} />
     </div>
   )
 }

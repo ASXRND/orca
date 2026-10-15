@@ -189,7 +189,6 @@
             "revealInFinder": "Показать в Finder"
           },
           "FileExplorerSplitLayout": {
-            "idlePaused": "Приостановлено после минуты бездействия — нажмите, чтобы возобновить",
             "resizeDivider": "Изменить размер панелей обозревателя",
             "toggleOrientation": "Переключить ориентацию сплита"
           },

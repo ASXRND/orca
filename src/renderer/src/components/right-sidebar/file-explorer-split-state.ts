@@ -10,8 +10,6 @@ export const FILE_EXPLORER_SPLIT_DEFAULT_RATIO = 0.5
 /** Min/max so neither pane collapses fully by drag; close via the split button instead. */
 export const FILE_EXPLORER_SPLIT_MIN_RATIO = 0.1
 export const FILE_EXPLORER_SPLIT_MAX_RATIO = 0.9
-/** ms without pointer/keyboard activity before an idle pane stops rendering. */
-export const FILE_EXPLORER_SPLIT_IDLE_MS = 60_000
 
 export function clampFileExplorerSplitRatio(ratio: number): FileExplorerSplitRatio {
   if (!Number.isFinite(ratio)) {
