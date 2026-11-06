@@ -2,13 +2,13 @@ import { readFileSync, mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { RelayAgentHookServer } from '../../relay/agent-hook-server'
+import { RelayAgentHookServer } from '../../wsl-guest/agent-hook-server'
 import { AgentHookServer, _internals } from './server'
 import { createRuntimeAutomationRunTerminalObserver } from '../automations/runtime-terminal-run-observer'
 import {
   createTranscriptPane,
   TRANSCRIPT_PANE_PTY_ID
-} from '../runtime/agent-transcript-pane-test-harness'
+} from '../runtime/orca-runtime-tests/agent-transcript-pane-test-harness'
 import { buildBody, PANE, postHookEvent } from './server.test-fixtures'
 
 vi.mock('electron', () => ({
@@ -171,7 +171,6 @@ describe.each([false, true])('Claude wake-up production ingress remote=%s', (rem
           prematureCompletion.push(index)
         }
       }
-      // Every status subscriber must avoid a false whole-pane completion.
       expect(prematureCompletion).toEqual([])
       expect(server.row()).toMatchObject({
         state: 'done',

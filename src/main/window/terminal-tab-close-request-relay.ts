@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto'
 
-import { ipcMain } from 'electron'
-import type { BrowserWindow } from 'electron'
+import { ipcMain, type BrowserWindow } from 'electron'
+
 import type {
   TerminalTabCloseRequest,
   TerminalTabCloseResponse
-} from '../../shared/terminal-tab-close'
-import { onWindowClosed } from './window-closed-hub'
+} from '../../shared/workspace-layout/terminal-tab-close'
+import { addFanoutListener, addFanoutListeners } from '../runtime/events/event-listener-fanout'
 
 const TERMINAL_TAB_CLOSE_TIMEOUT_MS = 20_000
 
@@ -25,6 +25,7 @@ export async function requestTerminalTabCloseFromRenderer(
   const requestId = randomUUID()
   await new Promise<void>((resolve, reject) => {
     let settled = false
+    const releaseListeners: (() => void)[] = []
     const onRendererUnavailable = (): void => finish(new Error('renderer_unavailable'))
     const finish = (error?: Error): void => {
       if (settled) {
@@ -32,11 +33,8 @@ export async function requestTerminalTabCloseFromRenderer(
       }
       settled = true
       clearTimeout(timeout)
-      ipcMain.removeListener('ui:terminalTabCloseResponse', onResponse)
-      removeClosedSubscription()
-      if (typeof webContents.removeListener === 'function') {
-        webContents.removeListener('destroyed', onRendererUnavailable)
-        webContents.removeListener('render-process-gone', onRendererUnavailable)
+      for (const release of releaseListeners) {
+        release()
       }
       if (error) {
         reject(error)
@@ -49,8 +47,7 @@ export async function requestTerminalTabCloseFromRenderer(
       TERMINAL_TAB_CLOSE_TIMEOUT_MS
     )
     const onResponse = (event: Electron.IpcMainEvent, response: TerminalTabCloseResponse): void => {
-      // Why: request IDs are visible to renderer code; only the selected main
-      // window may commit or reject its lifecycle transaction.
+      // Visible request IDs confer no authority; only the selected window may commit/reject its lifecycle transaction.
       if (event.sender !== webContents || response.requestId !== requestId) {
         return
       }
@@ -60,11 +57,15 @@ export async function requestTerminalTabCloseFromRenderer(
         finish()
       }
     }
-    ipcMain.on('ui:terminalTabCloseResponse', onResponse)
-    const removeClosedSubscription = onWindowClosed(mainWindow, onRendererUnavailable)
-    if (typeof webContents.once === 'function') {
-      webContents.once('destroyed', onRendererUnavailable)
-      webContents.once('render-process-gone', onRendererUnavailable)
+    releaseListeners.push(addFanoutListener(ipcMain, 'ui:terminalTabCloseResponse', onResponse))
+    // Lean test windows may lack event methods.
+    if (typeof mainWindow.on === 'function') {
+      releaseListeners.push(addFanoutListener(mainWindow, 'closed', onRendererUnavailable))
+    }
+    if (typeof webContents.on === 'function') {
+      releaseListeners.push(
+        addFanoutListeners(webContents, ['destroyed', 'render-process-gone'], onRendererUnavailable)
+      )
     }
     const request: TerminalTabCloseRequest = { requestId, tabId, ...options }
     try {

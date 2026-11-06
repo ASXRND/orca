@@ -7,7 +7,7 @@ import type {
   SessionTabCloseResponse
 } from '../../shared/session-tab-close'
 import { SESSION_TAB_CLOSE_TIMEOUT_ERROR } from '../../shared/session-tab-close'
-import { onWindowClosed } from './window-closed-hub'
+import { addFanoutListener, addFanoutListeners } from '../runtime/events/event-listener-fanout'
 
 const SESSION_TAB_CLOSE_CONFIRMATION_MS = 5 * 60_000
 const SESSION_TAB_CLOSE_RESPONSE_GRACE_MS = 5_000
@@ -24,17 +24,16 @@ export async function requestSessionTabCloseFromRenderer(
   const requestId = randomUUID()
   await new Promise<void>((resolve, reject) => {
     let settled = false
+    const releaseListeners: (() => void)[] = []
     const finish = (error?: Error): void => {
       if (settled) {
         return
       }
       settled = true
       clearTimeout(timeout)
-      ipcMain.removeListener('ui:sessionTabCloseResponse', onResponse)
-      removeClosedSubscription()
-      webContents.removeListener('destroyed', onRendererUnavailable)
-      webContents.removeListener('render-process-gone', onRendererUnavailable)
-      webContents.removeListener('did-start-loading', onRendererUnavailable)
+      for (const release of releaseListeners) {
+        release()
+      }
       if (error) {
         reject(error)
       } else {
@@ -54,11 +53,15 @@ export async function requestSessionTabCloseFromRenderer(
       SESSION_TAB_CLOSE_CONFIRMATION_MS + SESSION_TAB_CLOSE_RESPONSE_GRACE_MS
     )
     timeout.unref?.()
-    ipcMain.on('ui:sessionTabCloseResponse', onResponse)
-    const removeClosedSubscription = onWindowClosed(mainWindow, onRendererUnavailable)
-    webContents.once('destroyed', onRendererUnavailable)
-    webContents.once('render-process-gone', onRendererUnavailable)
-    webContents.once('did-start-loading', onRendererUnavailable)
+    releaseListeners.push(
+      addFanoutListener(ipcMain, 'ui:sessionTabCloseResponse', onResponse),
+      addFanoutListener(mainWindow, 'closed', onRendererUnavailable),
+      addFanoutListeners(
+        webContents,
+        ['destroyed', 'render-process-gone', 'did-start-loading'],
+        onRendererUnavailable
+      )
+    )
     const request: SessionTabCloseRequest = { requestId, tabId, worktreeId, expiresAt }
     try {
       webContents.send('ui:sessionTabCloseRequest', request)

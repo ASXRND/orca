@@ -1,22 +1,21 @@
-// The one thing that puts an idle agent to rest.
-//
-// Nothing a viewer does keeps an agent alive or starts one: a chat on screen and a chat in a
-// background tab are the same to this sweep. Every few minutes it looks at each open conversation
-// and stops the provider child of one that has been quiet for the idle window and owes no work,
-// then drops the in-memory fold of one that is only a cache. The conversation itself — its
-// record, tab, status row and readers — is untouched, and the next send starts a new child.
-//
-// Owed work is derived on every tick, never stored, so there is nothing to disagree with it.
+// Derive owed work each tick, independent of viewers; retire quiet children and cached folds,
+// preserving durable conversations for the next send.
 
-import { agentChildWorkLiveness } from '../../../shared/agent-status-child-work-liveness'
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
-import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
+import { DEFAULT_NATIVE_CHAT_IDLE_STOP_MINUTES } from '../../../shared/native-chat/native-chat-idle-stop'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
+import type { AgentSessionIdleConfirmation } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
-import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
+import {
+  heldStructuredAgentSessionCurrentWork,
+  type StructuredAgentSessionCurrentWorkHost
+} from './structured-agent-session-host-current-work'
+
+type RunningChild = NonNullable<StructuredAgentSessionHostSession['child']>
 
 export const STRUCTURED_AGENT_SESSION_IDLE_SWEEP_INTERVAL_MS = 5 * 60_000
-export const STRUCTURED_AGENT_SESSION_IDLE_MS = 30 * 60_000
+export const STRUCTURED_AGENT_SESSION_IDLE_MS = DEFAULT_NATIVE_CHAT_IDLE_STOP_MINUTES * 60_000
 
 export type StructuredAgentSessionIdleSweepDeps = {
   sessions: ReadonlyMap<string, StructuredAgentSessionHostSession> & {
@@ -27,50 +26,48 @@ export type StructuredAgentSessionIdleSweepDeps = {
   now: () => number
   isDisposed: () => boolean
   deliveryActive: (sessionId: string) => boolean
-  /** The session's child records, the host's one read of them. */
-  childWork: (sessionId: string) => readonly AgentChildWorkView[] | undefined
-  /** An orchestration dispatch that still owns this session's worker; derived from its database. */
+  /** Includes provider work not yet recorded. */
+  childWorkOpen: (sessionId: string) => boolean
   hasOpenDispatch: (sessionId: string) => boolean
-  /** The provider holds a send it took and has not answered; see `holdsDispatch`. */
+  /** Provider-retained, unanswered sends. */
   providerHoldsDispatch: (sessionId: string) => boolean
-  /** Each of these runs inside the session's serialize and never takes it again. */
+  /** Provider-declared background work, asked fresh before a running child's idle stop. */
+  confirmIdle: (sessionId: string) => Promise<AgentSessionIdleConfirmation> | undefined
+  store: StructuredAgentSessionCurrentWorkHost['store']
+  /** Already inside nonreentrant session serialization. */
   stopAgent: (sessionId: string) => Promise<void>
   stopStartingAgent: (sessionId: string) => Promise<void>
   closeConversation: (sessionId: string) => Promise<boolean>
   logger: StructuredAgentSessionLogger
   intervalMs?: number
-  idleMs?: number
+  /** Read every tick so a settings change applies without a restart; null never stops a chat. */
+  idleMs?: () => number | null
 }
 
-/** The host's reads of what a running child still serves besides its journal. */
 export type StructuredAgentSessionChildWorkReads = {
-  childWork: () => readonly AgentChildWorkView[] | undefined
+  /** Ended-generation turns/prompts cannot retain children; null means no held conversation. */
+  currentWork: () => Pick<
+    StructuredAgentSessionCurrentWork,
+    'activeTurnId' | 'hasActionablePrompt'
+  > | null
+  /** Provider evidence; bounded stores may have refused a record. */
+  childWorkOpen: () => boolean
   hasOpenDispatch: () => boolean
   providerHoldsDispatch: () => boolean
 }
 
-/** Work the running child owes apart from queued sends: a turn, a child agent, an open
- *  orchestration dispatch, a send the provider holds, or a prompt nobody answered. Whatever owes
- *  any of it keeps its child; it builds no snapshot. */
+/** Check turn, child, dispatch, held-send and prompt work without building a snapshot. */
 export function structuredAgentSessionChildHasOpenWork(
-  journal: Pick<AgentSessionJournal, 'activeTurnId' | 'visitItems'>,
   reads: StructuredAgentSessionChildWorkReads
 ): boolean {
-  if (
-    journal.activeTurnId() !== null ||
-    agentChildWorkLiveness(reads.childWork()) !== null ||
+  const work = reads.currentWork()
+  return (
+    (work !== null && work.activeTurnId() !== null) ||
+    reads.childWorkOpen() ||
     reads.hasOpenDispatch() ||
-    reads.providerHoldsDispatch()
-  ) {
-    return true
-  }
-  let pendingPrompt = false
-  journal.visitItems((_itemId, _sequence, body) => {
-    // A subagent can raise a prompt the lead turn cannot see.
-    pendingPrompt ||=
-      (body.kind === 'approval' || body.kind === 'question') && body.resolution.state === 'pending'
-  })
-  return pendingPrompt
+    reads.providerHoldsDispatch() ||
+    (work !== null && work.hasActionablePrompt())
+  )
 }
 
 export class StructuredAgentSessionIdleSweep {
@@ -84,7 +81,6 @@ export class StructuredAgentSessionIdleSweep {
       () => void this.tick(),
       this.deps.intervalMs ?? STRUCTURED_AGENT_SESSION_IDLE_SWEEP_INTERVAL_MS
     )
-    // An idle sweep must never be the reason a process stays alive at quit.
     this.timer.unref?.()
   }
 
@@ -95,25 +91,23 @@ export class StructuredAgentSessionIdleSweep {
     }
   }
 
-  /** One pass over every open conversation. Sessions run concurrently, so one waiting behind a
-   *  locked start does not hold up the rest; a pass still running skips the next. */
+  /** Run sessions concurrently; skip overlapping ticks so one locked start cannot delay others. */
   async tick(): Promise<void> {
     if (this.running || this.deps.isDisposed()) {
       return
     }
     this.running = true
     try {
+      const agentIdleMs = this.idleWindow()
       await Promise.allSettled(
         [...this.deps.sessions.keys()].map((sessionId) =>
-          this.deps
-            .serialize(sessionId, () => this.tickUnderSerialize(sessionId))
-            .catch((error: unknown) =>
-              this.deps.logger.warn('an idle sweep step failed', {
-                scope: 'idle-sweep',
-                sessionId,
-                error
-              })
-            )
+          this.sweepSession(sessionId, agentIdleMs).catch((error: unknown) =>
+            this.deps.logger.warn('an idle sweep step failed', {
+              scope: 'idle-sweep',
+              sessionId,
+              error
+            })
+          )
         )
       )
     } finally {
@@ -121,47 +115,90 @@ export class StructuredAgentSessionIdleSweep {
     }
   }
 
-  /** Re-derives everything inside the session's lock, so an accept already queued ahead is seen. */
-  private async tickUnderSerialize(sessionId: string): Promise<void> {
+  private idleWindow(): number | null {
+    return this.deps.idleMs ? this.deps.idleMs() : STRUCTURED_AGENT_SESSION_IDLE_MS
+  }
+
+  /** Ask outside serialization so a slow provider never delays user actions; recheck before stopping. */
+  private async sweepSession(sessionId: string, agentIdleMs: number | null): Promise<void> {
+    const unconfirmed = await this.deps.serialize(sessionId, () =>
+      this.tickUnderSerialize(sessionId, agentIdleMs, null)
+    )
+    if (!unconfirmed) {
+      return
+    }
+    const answer = (await this.deps.confirmIdle(sessionId)) ?? 'idle'
+    if (answer === 'unknown') {
+      return
+    }
+    await this.deps.serialize(sessionId, async () => {
+      if (answer === 'idle') {
+        // The answer can take seconds; a window changed meanwhile (to Never, say) still applies.
+        await this.tickUnderSerialize(sessionId, this.idleWindow(), unconfirmed)
+      } else if (this.deps.sessions.get(sessionId)?.child === unconfirmed) {
+        this.deps.sessions.touch(sessionId)
+      }
+    })
+  }
+
+  /** Recheck under serialization to include queued acceptance; a running child must be confirmed idle. */
+  private async tickUnderSerialize(
+    sessionId: string,
+    agentIdleMs: number | null,
+    confirmed: RunningChild | null
+  ): Promise<RunningChild | null> {
     const session = this.deps.sessions.get(sessionId)
     if (!session || this.deps.isDisposed()) {
-      return
+      return null
     }
-    // Owed work is activity, read every tick, so the agent gets a full window once it ends: a child
-    // can read done before the lead's wake-up turn writes anything.
+    // Renew owed work every tick to allow a full window for the lead’s post-child wake-up.
     if (session.child && session.child.phase !== 'starting' && this.owesWork(sessionId, session)) {
       this.deps.sessions.touch(sessionId)
-      return
+      return null
+    }
+    // Never only keeps agents running; a handle with no agent still retires on the default window.
+    const idleMs = agentIdleMs ?? (session.child ? null : STRUCTURED_AGENT_SESSION_IDLE_MS)
+    if (idleMs === null) {
+      return null
     }
     const lastActivityAt = this.deps.sessions.lastActivityAt(sessionId) ?? this.deps.now()
-    if (this.deps.now() - lastActivityAt < (this.deps.idleMs ?? STRUCTURED_AGENT_SESSION_IDLE_MS)) {
-      return
+    if (this.deps.now() - lastActivityAt < idleMs) {
+      return null
     }
     if (session.child) {
-      // A start that has been quiet this long is not coming: the host stops it, with its reason.
       if (session.child.phase === 'starting') {
         await this.deps.stopStartingAgent(sessionId)
-        return
+        return null
+      }
+      if (session.child !== confirmed) {
+        return session.child
       }
       await this.deps.stopAgent(sessionId)
     }
     await this.deps.closeConversation(sessionId)
+    return null
   }
 
   private queuedOrDelivering(sessionId: string, session: StructuredAgentSessionHostSession) {
     return (
       this.deps.deliveryActive(sessionId) ||
-      session.journal.submissions().some(isQueuedAgentJournalSubmission)
+      session.journal.inputOrder.recoverableSubmissions().some(isQueuedAgentJournalSubmission)
     )
   }
 
-  /** Work the running child still owes. Scoped to the child: with none, nothing here can pin the
-   *  handle, and a leftover prompt or turn row is only history. */
+  /** Without a child, leftover turns/prompts are history and cannot retain the handle. */
   private owesWork(sessionId: string, session: StructuredAgentSessionHostSession): boolean {
     return (
       this.queuedOrDelivering(sessionId, session) ||
-      structuredAgentSessionChildHasOpenWork(session.journal, {
-        childWork: () => this.deps.childWork(sessionId),
+      structuredAgentSessionChildHasOpenWork({
+        currentWork: () =>
+          heldStructuredAgentSessionCurrentWork(
+            this.deps.store,
+            sessionId,
+            session.journal,
+            session
+          ),
+        childWorkOpen: () => this.deps.childWorkOpen(sessionId),
         hasOpenDispatch: () => this.deps.hasOpenDispatch(sessionId),
         providerHoldsDispatch: () => this.deps.providerHoldsDispatch(sessionId)
       })

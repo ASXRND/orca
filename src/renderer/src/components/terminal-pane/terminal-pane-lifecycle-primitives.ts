@@ -1,11 +1,18 @@
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { Terminal } from '@xterm/xterm'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { PtyPaneStartup } from './pty-connection-types'
-import type { PtyTransport } from './pty-transport'
+import type { PtyTransport } from './pty-transport-types'
 import type { PaneCwdMap } from './resolve-split-cwd'
 import type { TerminalPaneSplitSource } from '../../../../shared/feature-education-telemetry'
-import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
-import { resolveLocalhostHttpLinkDisplayUrl } from '@/lib/http-link-routing'
+
+import {
+  type HttpLinkSourceOwner,
+  resolveLocalhostHttpLinkDisplayUrl
+} from '@/lib/http-link-routing'
 import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
 import { PRIMARY_SELECTION_MAX_LENGTH } from '@/lib/primary-selection'
 
@@ -46,7 +53,7 @@ export function reportActiveRendererPtyForPane(
 ): void {
   for (const [paneId, transport] of paneTransports) {
     const ptyId = transport.getPtyId()
-    if (!ptyId || ptyId.startsWith('remote:')) {
+    if (!ptyId || isRemoteRuntimePtyId(ptyId)) {
       continue
     }
     window.api.pty.setActiveRendererPty?.(ptyId, activePaneId === paneId)

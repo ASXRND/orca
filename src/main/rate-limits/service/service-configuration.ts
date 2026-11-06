@@ -1,7 +1,6 @@
 import type { BrowserWindow } from 'electron'
 import { hasMiniMaxSessionCookie } from '../../minimax/minimax-cookie-store'
 import { hasMiniMaxApiKey } from '../../minimax/minimax-api-key-store'
-import { onWindowClosed } from '../../window/window-closed-hub'
 import { hasZcodePlanApiKey } from '../../zcode/zcode-plan-api-key-store'
 import { RateLimitServiceAccountRefresh } from './service-account-refresh'
 import {
@@ -86,14 +85,14 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
     this.detachWindowListeners?.()
     this.mainWindow = mainWindow
     const refreshOnResume = (): void => {
-      void this.refreshIfWindowActive()
+      void this.refreshIfWatched()
     }
-    // Why: attach() can replace windows; remove the previous closed subscription too, not only the focus listeners.
+    // Replacing windows must also detach the old closed listener.
     const detachWindowListeners = (): void => {
       mainWindow.removeListener('focus', refreshOnResume)
       mainWindow.removeListener('show', refreshOnResume)
       mainWindow.removeListener('restore', refreshOnResume)
-      removeClosedSubscription()
+      mainWindow.removeListener('closed', onClosed)
     }
     const onClosed = (): void => {
       detachWindowListeners()
@@ -107,12 +106,27 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
     mainWindow.on('focus', refreshOnResume)
     mainWindow.on('show', refreshOnResume)
     mainWindow.on('restore', refreshOnResume)
-    const removeClosedSubscription = onWindowClosed(mainWindow, onClosed)
+    mainWindow.on('closed', onClosed)
     this.detachWindowListeners = detachWindowListeners
+    // Quota probes spawn CLIs/use network; defer past first paint, then show/focus refresh.
+    this.scheduleDeferredStartupRefresh()
+  }
+
+  /** Counts a paired client's usage stream so polls run without a focused window; returns its release. */
+  addUsageViewer(): () => void {
+    this.usageViewers += 1
+    let released = false
+    return () => {
+      if (!released) {
+        released = true
+        this.usageViewers -= 1
+      }
+    }
   }
 
   start(options: { fetchImmediately?: boolean } = {}): void {
     if (options.fetchImmediately !== false) {
+      this.clearDeferredStartupRefresh()
       void this.fetchAll()
     } else {
       this.scheduleDeferredStartupRefresh()
@@ -138,7 +152,7 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
     this.pruneInactiveCodexState()
     return {
       ...this.state,
-      // Why: the cookie lives on the filesystem, not GlobalSettings; surface its presence so the renderer keeps the MiniMax bar across reloads.
+      // Filesystem-stored cookie presence keeps MiniMax visible across renderer reloads.
       minimaxCookieConfigured: hasMiniMaxSessionCookie(),
       minimaxApiKeyConfigured: hasMiniMaxApiKey(),
       zcodePlanApiKeyConfigured: hasZcodePlanApiKey(),

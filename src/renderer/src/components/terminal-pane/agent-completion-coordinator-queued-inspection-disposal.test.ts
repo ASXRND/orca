@@ -6,7 +6,7 @@ import {
   processResult,
   useAgentCompletionCoordinatorLifecycle
 } from './agent-completion-coordinator-test-harness'
-import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
+import type { TerminalProcessInspection as RuntimeTerminalProcessInspection } from '../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 
 describe('agent completion coordinator queued inspections', () => {
   useAgentCompletionCoordinatorLifecycle()
@@ -20,7 +20,6 @@ describe('agent completion coordinator queued inspections', () => {
       createAgentCompletionCoordinator({
         paneKey: `tab-1:blocked-${index}`,
         getPtyId: () => `pty-blocked-${index}`,
-        getSettings: () => null,
         inspectProcess,
         dispatchCompletion: vi.fn(),
         isLive: () => true
@@ -40,7 +39,6 @@ describe('agent completion coordinator queued inspections', () => {
       createAgentCompletionCoordinator({
         paneKey: `tab-1:stale-${index}`,
         getPtyId: () => `pty-stale-${index}`,
-        getSettings: () => null,
         inspectProcess,
         dispatchCompletion: vi.fn(),
         isLive: () => true
@@ -50,7 +48,6 @@ describe('agent completion coordinator queued inspections', () => {
     const liveCoordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:live',
       getPtyId: () => 'pty-live',
-      getSettings: () => null,
       inspectProcess: liveInspectProcess,
       dispatchCompletion: vi.fn(),
       isLive: () => true

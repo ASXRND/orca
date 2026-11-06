@@ -8,8 +8,8 @@ import {
   type OsFileDropSequence
 } from '@/hooks/use-os-file-drop-owner'
 import { getNativeFileDropRejectionMessage } from '@/lib/native-file-drop-rejection-message'
-import { makePaneKey, type PaneKey } from '../../../../shared/stable-pane-id'
-import type { PtyTransport } from './pty-transport'
+import { makePaneKey, type PaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import type { PtyTransport } from './pty-transport-types'
 import { captureNativeTerminalFileDrop } from './terminal-native-file-drop-destination'
 
 export type TerminalPaneFileDropOwnerArgs = {

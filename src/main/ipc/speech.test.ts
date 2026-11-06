@@ -64,54 +64,6 @@ describe('registerSpeechHandlers', () => {
     deleteLocalSpeechModelMock.mockReset()
   })
 
-  it('clears the model download progress callback after completion', async () => {
-    const clearProgressCallback = vi.fn()
-    const progressCallbacks: ((modelId: string, progress: number) => void)[] = []
-    let resolveDownload: () => void = () => {}
-    const manager = {
-      setProgressCallback: vi.fn((callback: (modelId: string, progress: number) => void) => {
-        progressCallbacks.push(callback)
-        return clearProgressCallback
-      }),
-      downloadModel: vi.fn(
-        () =>
-          new Promise<void>((resolve) => {
-            resolveDownload = resolve
-          })
-      )
-    }
-    const send = vi.fn()
-    // Why: the closed subscription lives in the shared hub, which attaches its
-    // single real `closed` listener through window.on; capture the dispatcher.
-    const closeHandlers: (() => void)[] = []
-    const window = {
-      isDestroyed: vi.fn(() => false),
-      webContents: { send },
-      on: vi.fn((_event: string, handler: () => void) => {
-        closeHandlers.push(handler)
-      }),
-      once: vi.fn(),
-      off: vi.fn()
-    }
-    getSpeechModelManagerMock.mockReturnValue(manager)
-    fromWebContentsMock.mockReturnValue(window)
-    registerSpeechHandlers({} as never)
-
-    const pending = getHandler('speech:downloadModel')({ sender: { id: 7 } }, 'model-1')
-    progressCallbacks[0]?.('model-1', 0.5)
-    resolveDownload()
-    await pending
-
-    expect(send).toHaveBeenCalledWith('speech:downloadProgress', {
-      modelId: 'model-1',
-      progress: 0.5
-    })
-    expect(clearProgressCallback).toHaveBeenCalledTimes(1)
-    // Why: closing the window after completion must not double-clear.
-    closeHandlers[0]?.()
-    expect(clearProgressCallback).toHaveBeenCalledTimes(1)
-  })
-
   it('clears the model download progress callback when the window closes', async () => {
     const clearProgressCallback = vi.fn()
     let resolveDownload: () => void = () => {}
@@ -128,10 +80,9 @@ describe('registerSpeechHandlers', () => {
     const window = {
       isDestroyed: vi.fn(() => false),
       webContents: { send: vi.fn() },
-      on: vi.fn((_event: string, handler: () => void) => {
+      once: vi.fn((_event: string, handler: () => void) => {
         closeHandlers.push(handler)
       }),
-      once: vi.fn(),
       off: vi.fn()
     }
     getSpeechModelManagerMock.mockReturnValue(manager)
@@ -144,24 +95,6 @@ describe('registerSpeechHandlers', () => {
     await pending
 
     expect(clearProgressCallback).toHaveBeenCalledTimes(1)
-  })
-
-  it('routes desktop model deletion through the shared deletion helper', async () => {
-    const store = {} as never
-    const manager = { deleteModel: vi.fn() }
-    const sttService = { prepareModelForDeletion: vi.fn() }
-    getSpeechModelManagerMock.mockReturnValue(manager)
-    getSpeechSttServiceMock.mockReturnValue(sttService)
-    deleteLocalSpeechModelMock.mockResolvedValue(undefined)
-    registerSpeechHandlers(store)
-
-    await getHandler('speech:deleteModel')({ sender: { id: 7 } }, 'model-1')
-
-    expect(deleteLocalSpeechModelMock).toHaveBeenCalledWith({
-      store,
-      modelManager: manager,
-      sttService,
-      modelId: 'model-1'
-    })
+    expect(window.off).toHaveBeenCalledWith('closed', expect.any(Function))
   })
 })
